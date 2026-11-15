@@ -1083,6 +1083,7 @@
     "metric_time__day"
    ],
    "where": [],
+   "orderBy": [],
    "meta": {
     "chart": "line",
     "range": "1y"
@@ -1100,6 +1101,7 @@
     "line__line_name"
    ],
    "where": [],
+   "orderBy": [],
    "meta": {
     "chart": "line",
     "range": "all"
@@ -1117,26 +1119,10 @@
     "station__sector"
    ],
    "where": [],
+   "orderBy": [],
    "meta": {
     "chart": "line",
     "range": "all"
-   }
-  },
-  {
-   "name": "day_type_mix_monthly",
-   "label": "Rides by day type, monthly",
-   "description": "Total rides (rail + bus) split by CTA day type, by month.",
-   "metrics": [
-    "total_rides"
-   ],
-   "groupBy": [
-    "metric_time__month",
-    "service_day__day_type"
-   ],
-   "where": [],
-   "meta": {
-    "chart": "bar",
-    "range": "3y"
    }
   },
   {
@@ -1150,6 +1136,7 @@
     "metric_time__month"
    ],
    "where": [],
+   "orderBy": [],
    "meta": {
     "chart": "line",
     "range": "all"
@@ -1167,6 +1154,7 @@
     "station__ada_accessible"
    ],
    "where": [],
+   "orderBy": [],
    "meta": {
     "chart": "line",
     "range": "all"
@@ -1175,15 +1163,22 @@
   {
    "name": "bus_route_ranking",
    "label": "Bus route ranking, weekday boardings",
-   "description": "Average weekday boardings per route and the change vs 52 weeks earlier.",
+   "description": "Average weekday, Saturday and Sunday/holiday boardings per route, busiest first.",
    "metrics": [
     "bus_avg_weekday_boardings",
-    "bus_avg_weekday_yoy"
+    "bus_avg_saturday_boardings",
+    "bus_avg_sunday_boardings"
    ],
    "groupBy": [
     "route__route_name"
    ],
    "where": [],
+   "orderBy": [
+    {
+     "key": "bus_avg_weekday_boardings",
+     "desc": true
+    }
+   ],
    "meta": {
     "chart": "table",
     "range": "28d"
@@ -1192,18 +1187,43 @@
   {
    "name": "station_weekday_ranking",
    "label": "Station ranking, weekday entries",
-   "description": "Average weekday entries per station and the change vs 52 weeks earlier.",
+   "description": "Average weekday, Saturday and Sunday/holiday entries per station, busiest first.",
    "metrics": [
     "rail_avg_weekday_entries",
-    "rail_avg_weekday_yoy"
+    "rail_avg_saturday_entries",
+    "rail_avg_sunday_entries"
    ],
    "groupBy": [
     "station__station_name"
    ],
    "where": [],
+   "orderBy": [
+    {
+     "key": "rail_avg_weekday_entries",
+     "desc": true
+    }
+   ],
    "meta": {
     "chart": "table",
     "range": "28d"
+   }
+  },
+  {
+   "name": "day_type_mix_monthly",
+   "label": "Rides by day type, monthly",
+   "description": "Total rides (rail + bus) split by CTA day type, by month.",
+   "metrics": [
+    "total_rides"
+   ],
+   "groupBy": [
+    "metric_time__month",
+    "service_day__day_type"
+   ],
+   "where": [],
+   "orderBy": [],
+   "meta": {
+    "chart": "stacked",
+    "range": "3y"
    }
   }
  ]

@@ -33,6 +33,10 @@ export function ResultChart({ result, chart, smooth, height = 300, title }: Resu
     pivot.hiddenSeries ? `Showing the ${pivot.series.length} largest series; ${pivot.hiddenSeries} more in the table view.` : null,
     smooth && pivot.grain === 'day' ? `${smooth}-day trailing average.` : null,
   ].filter(Boolean)
+  // Averages, ratios and shares do not add up, so they never stack (a stacked share would show a 123% "total").
+  const stackable = result.columns.filter((c) => pivot.series.some((p) => p.metric === c.key)).every((c) => c.additive)
+  const kind = chart === 'stacked' && !stackable ? 'bar' : chart
+  if (chart === 'stacked' && !stackable) notes.push('Shown side by side: these metrics are averages or ratios, which do not add up.')
 
   let body
   if (pivot.grain) {
@@ -42,12 +46,12 @@ export function ResultChart({ result, chart, smooth, height = 300, title }: Resu
     const last = String(pivot.data[pivot.data.length - 1]?.t ?? '')
     const long = first && last ? (Date.parse(last) - Date.parse(first)) / 86_400_000 > 300 : false
     const tickGrain = long && (grain === 'day' || grain === 'week') ? 'month' : grain
-    if (chart === 'bar' || chart === 'stacked') {
+    if (kind === 'bar' || kind === 'stacked') {
       body = (
         <PeriodBarChart
           data={pivot.data}
           series={pivot.series}
-          stacked={chart === 'stacked'}
+          stacked={kind === 'stacked'}
           formatTick={(t) => formatPeriod(t, tickGrain, true)}
           formatTitle={(t) => formatPeriod(t, grain)}
           formatValue={fmt}
@@ -73,10 +77,14 @@ export function ResultChart({ result, chart, smooth, height = 300, title }: Resu
       )
     }
   } else {
-    // No time: rank the first dimension by the first metric.
-    const metric = result.columns.find((c) => c.kind === 'metric')!
-    const dim = result.columns.find((c) => c.kind === 'dimension' || c.kind === 'entity')
-    const rows = [...result.rows].filter((r) => typeof r[metric.key] === 'number').sort((a, b) => (b[metric.key] as number) - (a[metric.key] as number))
+    // No time: rank every dimension combination by the first metric, in the query's own order.
+    const metrics = result.columns.filter((c) => c.kind === 'metric')
+    const metric = metrics[0]
+    const dims = result.columns.filter((c) => c.kind === 'dimension' || c.kind === 'entity')
+    const dim = dims[0]
+    const rows = result.rows.filter((r) => typeof r[metric.key] === 'number')
+    const labelOf = (r: (typeof rows)[number]) => dims.map((d) => formatCategory(r[d.key])).join(' · ')
+    if (dim && metrics.length > 1) notes.push(`Bars show ${metric.label}; ${metrics.slice(1).map((m) => m.label).join(', ')} ${metrics.length > 2 ? 'are' : 'is'} in the table view.`)
     if (!dim) {
       body = (
         <div className="flex flex-wrap gap-8 py-4">
@@ -94,8 +102,8 @@ export function ResultChart({ result, chart, smooth, height = 300, title }: Resu
       body = (
         <RankedBars
           items={rows.slice(0, 20).map((r) => ({
-            key: String(r[dim.key]),
-            label: formatCategory(r[dim.key]),
+            key: dims.map((d) => String(r[d.key])).join('|'),
+            label: labelOf(r),
             value: r[metric.key] as number,
             display: formatValue(r[metric.key], metric.format),
           }))}

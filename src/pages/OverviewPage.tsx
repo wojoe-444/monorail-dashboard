@@ -58,9 +58,9 @@ export function OverviewPage() {
       'rail_share',
     ],
     timeRange: window,
-  }).rows[0]
+  }).rows[0] ?? {}
   const base = baseline2019(window)
-  const kpi2019 = useQueryOrThrow({ metrics: ['total_avg_weekday_rides', 'rail_avg_weekday_entries', 'bus_avg_weekday_boardings'], timeRange: base ?? window }).rows[0]
+  const kpi2019 = useQueryOrThrow({ metrics: ['total_avg_weekday_rides', 'rail_avg_weekday_entries', 'bus_avg_weekday_boardings'], timeRange: base ?? window }).rows[0] ?? {}
   const weekdayLy = (num(kpi.rail_avg_weekday_entries_ly) ?? 0) + (num(kpi.bus_avg_weekday_boardings_ly) ?? 0) || null
   const weekdayNow = num(kpi.total_avg_weekday_rides)
   const recovery = base && weekdayNow !== null && num(kpi2019.total_avg_weekday_rides) ? weekdayNow / (kpi2019.total_avg_weekday_rides as number) : null

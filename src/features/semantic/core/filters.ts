@@ -82,7 +82,11 @@ export function parseFilter(src: string): FilterCondition[] {
     if (!t) throw new Error(`Filter ends early: ${src}`)
     if (t.k === 'str') return t.v
     // Bare words: booleans (normalized to lower case) and numbers.
-    if (t.k === 'word') return /^(true|false)$/i.test(t.v) ? t.v.toLowerCase() : t.v
+    if (t.k === 'word') {
+      // SQL NULL never equals anything (x IN (..., NULL) is never true), so a literal null cannot mean what it looks like.
+      if (/^null$/i.test(t.v)) throw new Error(`NULL is not supported in filters: ${src}`)
+      return /^(true|false)$/i.test(t.v) ? t.v.toLowerCase() : t.v
+    }
     throw new Error(`Expected a value in filter: ${src}`)
   }
   while (p < toks.length) {

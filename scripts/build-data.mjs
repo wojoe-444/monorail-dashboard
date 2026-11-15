@@ -202,9 +202,19 @@ function compileManifest(sm, savedQueryMeta = {}) {
       metrics: q.query_params.metrics,
       groupBy: q.query_params.group_by.map(groupByItem),
       where: filterOf(q.query_params.where),
+      orderBy: (q.query_params.order_by ?? []).map(orderItem),
+      limit: q.query_params.limit ?? undefined,
       meta: savedQueryMeta[q.name] ?? {},
     })),
   }
+}
+
+/** "Metric('x').descending(True)" -> { key: 'x', desc: true }; group-by items keep their query-spec key. */
+function orderItem(s) {
+  const desc = /\.descending\(\s*True\s*\)/i.test(s)
+  const item = s.replace(/\.descending\([^)]*\)/i, '').trim()
+  const metric = item.match(/^Metric\('([^']+)'\)$/)
+  return { key: metric ? metric[1] : groupByItem(item), desc }
 }
 
 function windowDays(w) {

@@ -23,7 +23,7 @@ import { formatRange } from '@/features/semantic/format'
 import { mfCommand, savedQueryYaml } from '@/features/semantic/mf'
 import { resolveRange } from '@/features/semantic/ranges'
 import { useQuery } from '@/features/semantic/useQuery'
-import { decodeSpec, encodeSpec, getView, saveView, specFromSavedQuery, useSavedViews, type ChartKind, type ViewSpec } from '@/features/semantic/views'
+import { decodeSpec, encodeSpec, exploreHref, getView, saveView, specFromSavedQuery, useSavedViews, type ChartKind, type ViewSpec } from '@/features/semantic/views'
 import { useUrlParams } from '@/hooks/useUrlParams'
 import { navigate } from '@/lib/router'
 
@@ -40,6 +40,7 @@ export function ExplorePage() {
   const viewId = params.get('view')
   const savedName = params.get('saved')
   const saved = viewId ? getView(viewId) : undefined
+  const missingView = !!viewId && !saved
   const team = savedName ? engine.manifest.savedQueries.find((q) => q.name === savedName) : undefined
   const base: ViewSpec = saved?.spec ?? (team ? specFromSavedQuery(team) : DEFAULT_SPEC)
   const fromUrl = decodeSpec(params.get('q'))
@@ -55,6 +56,9 @@ export function ExplorePage() {
   const window = resolveRange(spec.range, minDay, maxDay, spec.custom)
   const hasTime = spec.groupBy.some((g) => g.startsWith('metric_time'))
   const grain = spec.groupBy.find((g) => g.startsWith('metric_time'))?.split('__')[1]
+  // Without time, rows rank by the chosen metric (default: the first, largest first).
+  const sortKey = spec.orderBy && spec.metrics.includes(spec.orderBy.key) ? spec.orderBy.key : spec.metrics[0]
+  const stackable = spec.metrics.length > 0 && spec.metrics.every((m) => engine.isAdditive(m))
   const { result, error } = useQuery(
     spec.metrics.length
       ? {
@@ -63,7 +67,7 @@ export function ExplorePage() {
           where: spec.where,
           timeRange: window,
           limit: !hasTime ? spec.limit : undefined,
-          orderBy: !hasTime && spec.metrics[0] ? [{ key: spec.metrics[0], desc: true }] : undefined,
+          orderBy: !hasTime && sortKey ? [{ key: sortKey, desc: spec.orderBy?.desc ?? true }] : undefined,
         }
       : null,
   )
@@ -87,7 +91,7 @@ export function ExplorePage() {
         description="Ask any question the semantic layer can answer: pick metrics, split them, filter, and save the view. The same definitions run in dbt and MetricFlow."
         actions={
           <>
-            <Button variant="outline" onClick={() => copy('link', globalThis.location.href)}>
+            <Button variant="outline" onClick={() => copy('link', `${globalThis.location.href.split('#')[0]}#${exploreHref(spec, title)}`)}>
               {copied === 'link' ? <Check /> : <Link2 />}
               Copy link
             </Button>
@@ -98,6 +102,12 @@ export function ExplorePage() {
           </>
         }
       />
+
+      {missingView && (
+        <div role="alert" className="rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning-soft-foreground">
+          This link points to a view saved in someone else's browser, so it can't open here. Ask for a fresh link (Copy link now shares the whole view), or start from a team view below.
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -155,7 +165,7 @@ export function ExplorePage() {
                 options={[
                   { value: 'line', label: 'Line', disabled: !hasTime },
                   { value: 'bar', label: 'Bar' },
-                  { value: 'stacked', label: 'Stacked', disabled: !hasTime },
+                  { value: 'stacked', label: 'Stacked', disabled: !hasTime || !stackable, title: stackable ? undefined : 'Averages, ratios and shares do not add up' },
                   { value: 'table', label: 'Table' },
                 ]}
                 className="w-full justify-between"
@@ -166,6 +176,26 @@ export function ExplorePage() {
                   <option value="7">7-day average</option>
                   <option value="28">28-day average</option>
                 </NativeSelect>
+              )}
+              {!hasTime && sortKey && (
+                <div className="grid grid-cols-[1fr_auto] gap-2">
+                  <NativeSelect aria-label="Sort by" value={sortKey} onChange={(e) => set({ orderBy: { key: e.target.value, desc: spec.orderBy?.desc ?? true } })}>
+                    {spec.metrics.map((m) => (
+                      <option key={m} value={m}>
+                        Sort by {engine.metric(m).label}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                  <Segmented
+                    aria-label="Sort direction"
+                    value={spec.orderBy?.desc === false ? 'asc' : 'desc'}
+                    onChange={(v) => set({ orderBy: { key: sortKey, desc: v === 'desc' } })}
+                    options={[
+                      { value: 'desc', label: 'High', title: 'Largest first' },
+                      { value: 'asc', label: 'Low', title: 'Smallest first (e.g. the biggest declines)' },
+                    ]}
+                  />
+                </div>
               )}
               {!hasTime && (
                 <NativeSelect aria-label="Rows" value={String(spec.limit ?? 0)} onChange={(e) => set({ limit: Number(e.target.value) || undefined })}>
@@ -248,6 +278,11 @@ export function ExplorePage() {
                     <code className="mx-1 font-mono text-xs">npm run data:build</code> it shows under Team views for everyone.
                   </p>
                   <CodeBlock text={yaml} onCopy={() => copy('yaml', yaml)} copied={copied === 'yaml'} />
+                  {mf.note && (
+                    <p className="rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning-soft-foreground">
+                      As written, this view will not run as a MetricFlow saved query: {mf.note}
+                    </p>
+                  )}
                 </TabsContent>
               </Tabs>
             </Card>

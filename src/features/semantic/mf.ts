@@ -53,6 +53,15 @@ export function savedQueryYaml(name: string, label: string, description: string,
     lines.push('      where:')
     for (const w of spec.where) lines.push(`        - ${JSON.stringify(w)}`)
   }
-  lines.push('    config:', `      meta: { chart: ${spec.chart === 'stacked' ? 'bar' : spec.chart}, range: ${spec.range === 'custom' ? '1y' : spec.range} }`)
+  if (spec.orderBy) {
+    const item = spec.metrics.includes(spec.orderBy.key) ? `Metric('${spec.orderBy.key}')` : `Dimension('${spec.orderBy.key}')`
+    lines.push(`      order_by: ["${item}.descending(${spec.orderBy.desc === false ? 'False' : 'True'})"]`)
+  }
+  if (spec.limit) lines.push(`      limit: ${spec.limit}`)
+  // Presentation round-trips through config.meta; the app reads it back when it loads the team view.
+  const meta = [`chart: ${spec.chart}`, `range: ${spec.range}`]
+  if (spec.range === 'custom' && spec.custom?.start && spec.custom?.end) meta.push(`start: '${spec.custom.start}'`, `end: '${spec.custom.end}'`)
+  if (spec.smooth) meta.push(`smooth: ${spec.smooth}`)
+  lines.push('    config:', `      meta: { ${meta.join(', ')} }`)
   return lines.join('\n')
 }

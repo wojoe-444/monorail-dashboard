@@ -101,7 +101,17 @@ export function moveView(id: string, delta: -1 | 1) {
 export function specFromSavedQuery(q: SavedQuery): ViewSpec {
   const chart = (['line', 'bar', 'stacked', 'table'] as const).find((c) => c === q.meta.chart) ?? 'line'
   const range = (q.meta.range as RangePreset | undefined) ?? '1y'
-  return { metrics: q.metrics, groupBy: q.groupBy, where: q.where, range, chart: chart === 'bar' && q.groupBy.length > 1 ? 'stacked' : chart }
+  return {
+    metrics: q.metrics,
+    groupBy: q.groupBy,
+    where: q.where,
+    range,
+    custom: range === 'custom' ? { start: q.meta.start, end: q.meta.end } : undefined,
+    chart,
+    smooth: q.meta.smooth || undefined,
+    limit: q.limit,
+    orderBy: q.orderBy?.[0],
+  }
 }
 
 // URL encoding, so any view is a link: #/explore?q=<base64url JSON>

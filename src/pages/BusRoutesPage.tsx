@@ -88,7 +88,7 @@ export function BusRoutesPage() {
   const rows = allRows.filter((r) => (type === 'all' || r.route.type === type) && (!needle || r.route.id.toLowerCase() === needle || r.route.name.toLowerCase().includes(needle) || r.route.id.toLowerCase().startsWith(needle)))
 
   const typeWhere = type === 'all' ? [] : [`{{ Dimension('route__route_type') }} = '${type}'`]
-  const typeView: ViewSpec = { metrics: ['bus_avg_weekday_boardings'], groupBy: ['metric_time__month', 'route__route_type'], where: [], range: '3y', chart: 'stacked' }
+  const typeView: ViewSpec = { metrics: ['bus_avg_weekday_boardings'], groupBy: ['metric_time__month', 'route__route_type'], where: [], range: '3y', chart: 'line' }
   const byType = useQueryOrThrow({ metrics: typeView.metrics, groupBy: typeView.groupBy, timeRange: { start: baseline3y(ds.maxIso), end: ds.maxIso } })
 
   const columns: SortColumn<Row>[] = [
@@ -191,7 +191,7 @@ export function BusRoutesPage() {
       </div>
 
       <ChartCard title="Weekday boardings by route type, last 3 years" description="Average weekday boardings per month. Shuttles replace rail during closures." view={{ ...typeView, where: typeWhere }} result={byType}>
-        <ResultChart result={byType} chart="stacked" title="Average weekday boardings by route type" height={240} />
+        <ResultChart result={byType} chart="line" title="Average weekday boardings by route type" height={240} />
       </ChartCard>
 
       <Card className="py-2">

@@ -14,7 +14,7 @@ import { ChartCard } from '@/features/semantic/components/ChartCard'
 import { RangeControl } from '@/features/semantic/components/RangeControl'
 import { dayOfIso, isoOfDay } from '@/features/semantic/core/time.ts'
 import { useDataset } from '@/features/semantic/data'
-import { formatCompact, formatDay, formatPercent, formatPeriod, formatRange, formatSignedPercent, formatValue } from '@/features/semantic/format'
+import { formatCompact, formatDay, formatPercent, formatPeriod, formatRange, formatSignedPercent, formatValue, ratioOf } from '@/features/semantic/format'
 import { pivotResult } from '@/features/semantic/pivot'
 import { baseline2019, resolveRange } from '@/features/semantic/ranges'
 import { useQueryOrThrow } from '@/features/semantic/useQuery'
@@ -65,10 +65,10 @@ function StationDetail({ stationId }: { stationId: string }) {
     metrics: ['rail_avg_weekday_entries', 'rail_avg_weekday_yoy', 'rail_avg_saturday_entries', 'rail_avg_sunday_entries', 'rail_entries', 'rail_entries_yoy'],
     where,
     timeRange: window,
-  }).rows[0]
+  }).rows[0] ?? {}
   const base = baseline2019(window)
-  const kpi2019 = useQueryOrThrow({ metrics: ['rail_avg_weekday_entries'], where, timeRange: base ?? window }).rows[0]
-  const recovery = base && num(kpi.rail_avg_weekday_entries) && num(kpi2019.rail_avg_weekday_entries) ? (kpi.rail_avg_weekday_entries as number) / (kpi2019.rail_avg_weekday_entries as number) : null
+  const kpi2019 = useQueryOrThrow({ metrics: ['rail_avg_weekday_entries'], where, timeRange: base ?? window }).rows[0] ?? {}
+  const recovery = base ? ratioOf(num(kpi.rail_avg_weekday_entries), num(kpi2019.rail_avg_weekday_entries)) : null
 
   // Rank among all stations by average weekday entries in the period.
   const ranking = useQueryOrThrow({ metrics: ['rail_avg_weekday_entries'], groupBy: ['station'], timeRange: window }).rows.filter((r) => num(r.rail_avg_weekday_entries) !== null)
