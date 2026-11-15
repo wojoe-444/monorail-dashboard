@@ -14,8 +14,9 @@ import { ChartCard } from '@/features/semantic/components/ChartCard'
 import { RangeControl } from '@/features/semantic/components/RangeControl'
 import { ResultTable } from '@/features/semantic/components/ResultTable'
 import { dayOfIso, isoOfDay } from '@/features/semantic/core/time.ts'
+import type { QueryResult } from '@/features/semantic/core/types.ts'
 import { useDataset } from '@/features/semantic/data'
-import { formatCompact, formatDay, formatPercent, formatPeriod, formatRange, formatSignedPercent, formatValue } from '@/features/semantic/format'
+import { formatCompact, formatDay, formatPercent, formatPeriod, formatRange, formatSignedPercent, formatValue, ratioOf } from '@/features/semantic/format'
 import { pivotResult } from '@/features/semantic/pivot'
 import { baseline2019, priorYear, recentWeeks, resolveRange } from '@/features/semantic/ranges'
 import { useQueryOrThrow } from '@/features/semantic/useQuery'
@@ -63,7 +64,11 @@ export function OverviewPage() {
   const kpi2019 = useQueryOrThrow({ metrics: ['total_avg_weekday_rides', 'rail_avg_weekday_entries', 'bus_avg_weekday_boardings'], timeRange: base ?? window }).rows[0] ?? {}
   const weekdayLy = (num(kpi.rail_avg_weekday_entries_ly) ?? 0) + (num(kpi.bus_avg_weekday_boardings_ly) ?? 0) || null
   const weekdayNow = num(kpi.total_avg_weekday_rides)
-  const recovery = base && weekdayNow !== null && num(kpi2019.total_avg_weekday_rides) ? weekdayNow / (kpi2019.total_avg_weekday_rides as number) : null
+  const recovery = base ? ratioOf(weekdayNow, num(kpi2019.total_avg_weekday_rides)) : null
+  const ofBaseline = (now: number | null, then: number | null) => {
+    const r = base ? ratioOf(now, then) : null
+    return r === null ? undefined : `· ${formatPercent(r, 0)} of 2019`
+  }
 
   // Weekly sparklines (12 complete weeks ending on the last day).
   const spark = useQueryOrThrow({
@@ -94,6 +99,17 @@ export function OverviewPage() {
       }
     })
   const lastRecovery = recoveryData[recoveryData.length - 1]
+  // The card's table and CSV carry the ratios it draws, not the averages behind them.
+  const recoveryResult: QueryResult = {
+    columns: [
+      { key: 'month', label: 'Month', kind: 'time', grain: 'month' },
+      { key: 'rail_share_of_2019', label: 'Rail, share of same month 2019', kind: 'metric', format: 'percent' },
+      { key: 'bus_share_of_2019', label: 'Bus, share of same month 2019', kind: 'metric', format: 'percent' },
+    ],
+    rows: recoveryData.map((d) => ({ month: d.t, rail_share_of_2019: d.rail, bus_share_of_2019: d.bus })),
+    plan: monthly.plan,
+    ms: monthly.ms,
+  }
 
   // Day types: average daily rides per day type, now vs 52 weeks earlier.
   const dayTypes = useQueryOrThrow({ metrics: ['rail_avg_daily_entries', 'bus_avg_daily_boardings'], groupBy: ['service_day__day_type'], timeRange: window })
@@ -160,7 +176,7 @@ export function OverviewPage() {
           value={formatCompact(num(kpi.rail_avg_weekday_entries))}
           delta={ratioDelta(num(kpi.rail_avg_weekday_entries), num(kpi.rail_avg_weekday_entries_ly))}
           deltaLabel="vs 52 wks"
-          hint={base && num(kpi2019.rail_avg_weekday_entries) && num(kpi.rail_avg_weekday_entries) ? `· ${formatPercent((kpi.rail_avg_weekday_entries as number) / (kpi2019.rail_avg_weekday_entries as number), 0)} of 2019` : undefined}
+          hint={ofBaseline(num(kpi.rail_avg_weekday_entries), num(kpi2019.rail_avg_weekday_entries))}
           trend={<Sparkline data={sparkOf('rail_avg_weekday_entries')} className="text-muted-foreground" />}
         />
         <StatTile
@@ -168,7 +184,7 @@ export function OverviewPage() {
           value={formatCompact(num(kpi.bus_avg_weekday_boardings))}
           delta={ratioDelta(num(kpi.bus_avg_weekday_boardings), num(kpi.bus_avg_weekday_boardings_ly))}
           deltaLabel="vs 52 wks"
-          hint={base && num(kpi2019.bus_avg_weekday_boardings) && num(kpi.bus_avg_weekday_boardings) ? `· ${formatPercent((kpi.bus_avg_weekday_boardings as number) / (kpi2019.bus_avg_weekday_boardings as number), 0)} of 2019` : undefined}
+          hint={ofBaseline(num(kpi.bus_avg_weekday_boardings), num(kpi2019.bus_avg_weekday_boardings))}
           trend={<Sparkline data={sparkOf('bus_avg_weekday_boardings')} className="text-muted-foreground" />}
         />
         <StatTile
@@ -332,8 +348,7 @@ export function OverviewPage() {
           className="xl:col-span-2"
           title="Recovery vs 2019"
           description={`Average weekday ridership as a share of the same month in 2019.${lastRecovery ? ` ${formatPeriod(lastRecovery.t, 'month')}: rail ${lastRecovery.rail ? formatPercent(lastRecovery.rail, 0) : '—'}, bus ${lastRecovery.bus ? formatPercent(lastRecovery.bus, 0) : '—'}.` : ''}`}
-          view={{ metrics: ['rail_avg_weekday_entries', 'bus_avg_weekday_boardings'], groupBy: ['metric_time__month'], where: [], range: 'all', chart: 'line' }}
-          result={monthly}
+          result={recoveryResult}
         >
           <TimeSeriesChart
             data={recoveryData}
@@ -374,7 +389,7 @@ export function OverviewPage() {
                     >
                       <span className="block truncate text-sm font-medium">{e.entityName}</span>
                       <span className="block text-xs text-muted-foreground">
-                        {e.mode === 'rail' ? 'Rail' : 'Bus'} · {e.days === 1 ? formatDay(e.start, true) : `${e.days} days from ${formatDay(e.start)}`}
+                        {e.mode === 'rail' ? 'Rail' : 'Bus'} · {e.days === 1 ? formatDay(e.start, true) : `${e.ongoing ? 'since' : 'from'} ${formatDay(e.start)} (${e.days.toLocaleString()} days)`}
                       </span>
                     </a>
                     <span className="flex shrink-0 flex-col items-end gap-1">

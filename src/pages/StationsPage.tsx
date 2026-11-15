@@ -17,7 +17,7 @@ import type { QueryResult } from '@/features/semantic/core/types.ts'
 import { downloadCsv } from '@/features/semantic/csv'
 import { useDataset, type Station } from '@/features/semantic/data'
 import { formatCompact, formatPercent, formatValue } from '@/features/semantic/format'
-import { baseline2019, recentWeeks } from '@/features/semantic/ranges'
+import { baseline2019, countDayType, recentWeeks } from '@/features/semantic/ranges'
 import { useQueryOrThrow } from '@/features/semantic/useQuery'
 import { useRangeParam } from '@/features/semantic/useRangeParam'
 import { exploreHref } from '@/features/semantic/views'
@@ -54,6 +54,11 @@ export function StationsPage() {
   const base = baseline2019(window)
   const before = useQueryOrThrow({ metrics: ['rail_avg_weekday_entries'], groupBy: ['station'], timeRange: base ?? window })
   const weekly = useQueryOrThrow({ metrics: ['rail_entries'], groupBy: ['station', 'metric_time__week'], timeRange: recentWeeks(ds.maxDay) })
+  // The total divides weekday entries by the system's weekdays, not by each station's reporting days.
+  const weekdayEntries = new Map(
+    useQueryOrThrow({ metrics: ['rail_entries'], groupBy: ['station'], where: ["{{ Dimension('service_day__day_type') }} = 'Weekday'"], timeRange: window }).rows.map((r) => [String(r.station), num(r.rail_entries) ?? 0]),
+  )
+  const systemWeekdays = countDayType(ds.dayType, window, 'Weekday')
 
   const byStation = new Map(current.rows.map((r) => [String(r.station), r]))
   const baseBy = new Map(before.rows.map((r) => [String(r.station), num(r.rail_avg_weekday_entries)]))
@@ -94,7 +99,7 @@ export function StationsPage() {
       (!needle || r.station.name.toLowerCase().includes(needle) || r.station.id.includes(needle)),
   )
 
-  const totalWeekday = rows.reduce((a, r) => a + (r.weekday ?? 0), 0)
+  const totalWeekday = systemWeekdays ? rows.reduce((a, r) => a + (weekdayEntries.get(r.station.id) ?? 0), 0) / systemWeekdays : null
   const growing = rows.filter((r) => (r.weekdayYoy ?? 0) > 0).length
   const withYoy = rows.filter((r) => r.weekdayYoy !== null).length
   const notAccessible = rows.filter((r) => !r.station.ada).length
@@ -267,7 +272,7 @@ export function StationsPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile label="Stations" value={String(rows.length)} hint={rows.length !== allRows.length ? `of ${allRows.length}` : 'reporting in period'} />
-        <StatTile label="Avg weekday entries" value={formatCompact(totalWeekday)} hint="sum of the stations shown" />
+        <StatTile label="Avg weekday entries" value={formatCompact(totalWeekday)} hint={`stations shown, per weekday (${systemWeekdays} in period)`} />
         <StatTile label="Growing vs 52 wks" value={withYoy ? `${growing} of ${withYoy}` : '—'} hint={withYoy ? formatPercent(growing / withYoy, 0) : undefined} />
         <StatTile label="Not ADA accessible" value={String(notAccessible)} hint={rows.length ? `${formatPercent(notAccessible / rows.length, 0)} of shown` : undefined} />
       </div>

@@ -109,3 +109,10 @@ export function recentWeeks(maxDay: number, weeks = 12): TimeWindow {
   const end = lastCompleteWeekEnd(maxDay)
   return { start: isoOfDay(end - weeks * 7 + 1), end: isoOfDay(end) }
 }
+
+/** Days in a window with a given CTA day type (e.g. 'Weekday'), from the service-day calendar. */
+export function countDayType(dayType: Map<number, string>, w: TimeWindow, type: string): number {
+  let n = 0
+  for (let d = dayOfIso(w.start); d <= dayOfIso(w.end); d++) if (dayType.get(d) === type) n++
+  return n
+}

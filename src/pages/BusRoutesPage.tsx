@@ -18,7 +18,7 @@ import type { QueryResult } from '@/features/semantic/core/types.ts'
 import { downloadCsv } from '@/features/semantic/csv'
 import { useDataset, type Route } from '@/features/semantic/data'
 import { formatCompact, formatPercent, formatValue } from '@/features/semantic/format'
-import { baseline2019, recentWeeks } from '@/features/semantic/ranges'
+import { baseline2019, countDayType, recentWeeks } from '@/features/semantic/ranges'
 import { useQueryOrThrow } from '@/features/semantic/useQuery'
 import { useRangeParam } from '@/features/semantic/useRangeParam'
 import type { ViewSpec } from '@/features/semantic/views'
@@ -56,6 +56,12 @@ export function BusRoutesPage() {
   const base = baseline2019(window)
   const before = useQueryOrThrow({ metrics: ['bus_avg_weekday_boardings'], groupBy: ['route'], timeRange: base ?? window })
   const weekly = useQueryOrThrow({ metrics: ['bus_boardings'], groupBy: ['route', 'metric_time__week'], timeRange: recentWeeks(ds.maxDay) })
+  // Totals across routes divide weekday boardings by the system's weekdays, not by each route's
+  // reporting days, so a route that ran only on event days does not count as a full-time route.
+  const weekdayBoardings = new Map(
+    useQueryOrThrow({ metrics: ['bus_boardings'], groupBy: ['route'], where: ["{{ Dimension('service_day__day_type') }} = 'Weekday'"], timeRange: window }).rows.map((r) => [String(r.route), num(r.bus_boardings) ?? 0]),
+  )
+  const systemWeekdays = countDayType(ds.dayType, window, 'Weekday')
 
   const by = new Map(current.rows.map((r) => [String(r.route), r]))
   const by2019 = new Map(before.rows.map((r) => [String(r.route), num(r.bus_avg_weekday_boardings)]))
@@ -133,12 +139,10 @@ export function BusRoutesPage() {
     downloadCsv(result, `bus routes ${window.start} to ${window.end}`)
   }
 
-  const weekdayTotal = rows.reduce((a, r) => a + (r.weekday ?? 0), 0)
-  const top10Share = (() => {
-    const sorted = [...rows].sort((a, b) => (b.weekday ?? 0) - (a.weekday ?? 0))
-    const t = sorted.slice(0, 10).reduce((a, r) => a + (r.weekday ?? 0), 0)
-    return weekdayTotal ? t / weekdayTotal : null
-  })()
+  const shownWeekdayBoardings = rows.map((r) => weekdayBoardings.get(r.route.id) ?? 0)
+  const weekdaySum = shownWeekdayBoardings.reduce((a, b) => a + b, 0)
+  const weekdayTotal = systemWeekdays ? weekdaySum / systemWeekdays : null
+  const top10Share = weekdaySum ? [...shownWeekdayBoardings].sort((a, b) => b - a).slice(0, 10).reduce((a, b) => a + b, 0) / weekdaySum : null
   const growing = rows.filter((r) => (r.yoy ?? 0) > 0).length
   const withYoy = rows.filter((r) => r.yoy !== null).length
 
@@ -185,7 +189,7 @@ export function BusRoutesPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile label="Routes" value={String(rows.length)} hint={rows.length !== allRows.length ? `of ${allRows.length}` : 'reporting in period'} />
-        <StatTile label="Avg weekday boardings" value={formatCompact(weekdayTotal)} hint="sum of the routes shown" />
+        <StatTile label="Avg weekday boardings" value={formatCompact(weekdayTotal)} hint={`routes shown, per weekday (${systemWeekdays} in period)`} />
         <StatTile label="Top 10 routes carry" value={top10Share !== null ? formatPercent(top10Share, 0) : '—'} hint="of weekday boardings shown" />
         <StatTile label="Growing vs 52 wks" value={withYoy ? `${growing} of ${withYoy}` : '—'} hint={withYoy ? formatPercent(growing / withYoy, 0) : undefined} />
       </div>

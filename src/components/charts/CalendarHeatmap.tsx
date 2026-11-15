@@ -43,6 +43,7 @@ function isoDow(day: number) {
 export function CalendarHeatmap({ cells, scale, extent = 0.5, formatValue, formatDay, describe, onSelect, ariaLabel }: CalendarHeatmapProps) {
   const [hover, setHover] = useState<CalendarCell | null>(null)
   if (!cells.length) return null
+  const byDay = new Map(cells.map((c) => [c.day, c]))
   const first = cells[0].day - (isoDow(cells[0].day) - 1)
   const weeks = Math.ceil((cells[cells.length - 1].day - first + 1) / 7)
   const values = cells.map((c) => c.value).filter((v): v is number => v !== null)
@@ -78,7 +79,28 @@ export function CalendarHeatmap({ cells, scale, extent = 0.5, formatValue, forma
   return (
     <div className="flex flex-col gap-2">
       <div className="overflow-x-auto">
-        <svg width={width} height={height} role="img" aria-label={ariaLabel} className="block">
+        <svg
+          width={width}
+          height={height}
+          role="application"
+          aria-roledescription="calendar"
+          aria-label={`${ariaLabel}. Arrow keys move between days${onSelect ? ', Enter opens the selected day' : ''}.`}
+          tabIndex={0}
+          className="block rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onFocus={() => setHover((h) => h ?? cells[cells.length - 1])}
+          onKeyDown={(e) => {
+            const step = { ArrowLeft: -7, ArrowRight: 7, ArrowUp: -1, ArrowDown: 1, Home: -Infinity, End: Infinity }[e.key]
+            if (step !== undefined) {
+              e.preventDefault()
+              const current = hover ?? cells[cells.length - 1]
+              const target = step === -Infinity ? cells[0] : step === Infinity ? cells[cells.length - 1] : byDay.get(current.day + step)
+              if (target) setHover(target)
+            } else if ((e.key === 'Enter' || e.key === ' ') && hover && onSelect) {
+              e.preventDefault()
+              onSelect(hover.day)
+            }
+          }}
+        >
           {monthTicks.map((m, i) =>
             i === 0 && monthTicks[1] && monthTicks[1].x - m.x < 28 ? null : (
               <text key={`${m.label}-${m.x}`} x={m.x} y={10} className="fill-muted-foreground text-[10px]">
@@ -129,7 +151,7 @@ export function CalendarHeatmap({ cells, scale, extent = 0.5, formatValue, forma
               {describe?.(hover.day) ? ` · ${describe(hover.day)}` : ''}
             </>
           ) : (
-            'Hover a day for its value'
+            'Hover a day, or focus the calendar and use the arrow keys'
           )}
         </span>
         <span className="flex items-center gap-1.5">

@@ -28,6 +28,13 @@ interface Point {
   recovery: number | null
 }
 
+/** The current query with one parameter changed, so list links keep the range, line and color. */
+function withParam(params: URLSearchParams, key: string, value: string): string {
+  const next = new URLSearchParams(params)
+  next.set(key, value)
+  return next.toString()
+}
+
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 const W = 1000
 const H = 1100
@@ -76,7 +83,8 @@ export function MapPage() {
           station: s,
           x: offX + (s.lon! * k - minX) * scale,
           y: H - (offY + (s.lat! - minY) * scale),
-          r: 3 + Math.sqrt((weekday ?? 0) / maxWeekday) * 18,
+          // Area proportional to weekday entries; a fixed 2px dot marks stations with no count.
+          r: weekday && weekday > 0 ? Math.max(2, Math.sqrt(weekday / maxWeekday) * 22) : 2,
           weekday,
           yoy: num(r?.rail_avg_weekday_yoy),
           recovery: base && weekday !== null && b ? weekday / b : null,
@@ -254,7 +262,7 @@ export function MapPage() {
             {ranked.map((p) => (
               <li key={p.station.id}>
                 <a
-                  href={href(`/map?focus=${p.station.id}${line ? `&line=${line}` : ''}${colorBy !== 'yoy' ? `&color=${colorBy}` : ''}`)}
+                  href={href(`/map?${withParam(params, 'focus', p.station.id)}`)}
                   onMouseEnter={() => setHover(p.station.id)}
                   onMouseLeave={() => setHover(null)}
                   className={cn(

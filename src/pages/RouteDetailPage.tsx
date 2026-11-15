@@ -63,7 +63,7 @@ function RouteDetail({ routeId }: { routeId: string }) {
   const ranking = useQueryOrThrow({ metrics: ['bus_avg_weekday_boardings'], groupBy: ['route'], timeRange: window }).rows.filter((r) => num(r.bus_avg_weekday_boardings) !== null)
   const rank = ranking.findIndex((r) => r.route === route.id) + 1
 
-  const dailyView: ViewSpec = { metrics: ['bus_boardings', 'bus_boardings_ly'], groupBy: ['metric_time__day'], where, range: preset, custom, chart: 'line' }
+  const dailyView: ViewSpec = { metrics: ['bus_boardings', 'bus_boardings_ly'], groupBy: ['metric_time__day'], where, range: preset, custom, chart: 'line', smooth: smooth === '7d' ? 7 : undefined }
   const daily = useQueryOrThrow({ metrics: dailyView.metrics, groupBy: dailyView.groupBy, where, timeRange: window })
   const dailyPivot = pivotResult(daily, { smooth: smooth === '7d' ? 7 : undefined })
 

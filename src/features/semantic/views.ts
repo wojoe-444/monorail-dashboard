@@ -89,10 +89,13 @@ export function setPinned(id: string, pinned: boolean) {
   emit(views.map((v) => (v.id === id ? { ...v, pinned } : v)))
 }
 
+/** Move a pinned view past its neighbouring pinned view (unpinned views keep their places). */
 export function moveView(id: string, delta: -1 | 1) {
   const i = views.findIndex((v) => v.id === id)
-  const j = i + delta
-  if (i < 0 || j < 0 || j >= views.length) return
+  if (i < 0) return
+  let j = i + delta
+  while (j >= 0 && j < views.length && !views[j].pinned) j += delta
+  if (j < 0 || j >= views.length) return
   const next = [...views]
   ;[next[i], next[j]] = [next[j], next[i]]
   emit(next)

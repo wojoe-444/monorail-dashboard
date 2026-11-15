@@ -74,7 +74,7 @@ function StationDetail({ stationId }: { stationId: string }) {
   const ranking = useQueryOrThrow({ metrics: ['rail_avg_weekday_entries'], groupBy: ['station'], timeRange: window }).rows.filter((r) => num(r.rail_avg_weekday_entries) !== null)
   const rank = ranking.findIndex((r) => r.station === station.id) + 1
 
-  const dailyView: ViewSpec = { metrics: ['rail_entries', 'rail_entries_ly'], groupBy: ['metric_time__day'], where, range: preset, custom, chart: 'line' }
+  const dailyView: ViewSpec = { metrics: ['rail_entries', 'rail_entries_ly'], groupBy: ['metric_time__day'], where, range: preset, custom, chart: 'line', smooth: smooth === '7d' ? 7 : undefined }
   const daily = useQueryOrThrow({ metrics: ['rail_entries', 'rail_entries_ly'], groupBy: ['metric_time__day'], where, timeRange: window })
   const dailyPivot = pivotResult(daily, { smooth: smooth === '7d' ? 7 : undefined })
 
@@ -106,6 +106,9 @@ function StationDetail({ stationId }: { stationId: string }) {
   }
 
   const exceptions = detectExceptions(ds, { start: dayOfIso(year.start), end: ds.maxDay, threshold: 0.35, minExpected: 200, modes: ['rail'], entityIds: [station.id] })
+
+  // An ongoing zero-count or no-data episode is a closure or a feed outage: say so up top.
+  const outage = exceptions.find((e) => e.ongoing && (e.kind === 'zero' || e.kind === 'missing'))
 
   const nearby = ds.stations
     .filter((s) => s.id !== station.id)
@@ -147,6 +150,11 @@ function StationDetail({ stationId }: { stationId: string }) {
         ))}
         {station.isTransfer && <Badge variant="info">Transfer station</Badge>}
         {stale && <Badge variant="warning">No data since {formatDay(station.lastDay!)}</Badge>}
+        {outage && (
+          <Badge variant={outage.kind === 'zero' ? 'destructive' : 'warning'}>
+            {outage.kind === 'zero' ? 'Reporting zero entries' : 'No data'} since {formatDay(outage.start)}
+          </Badge>
+        )}
         <span className="flex-1" />
         <RangeControl value={preset} custom={custom} onChange={setRange} presets={['28d', '90d', '6m', '1y', 'ytd', 'all']} />
       </div>
