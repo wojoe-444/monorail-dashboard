@@ -1,0 +1,28 @@
+name: cta_transit
+version: '1.0.0'
+config-version: 2
+profile: cta_transit
+
+model-paths: [models]
+seed-paths: [seeds]
+macro-paths: [macros]
+analysis-paths: [analyses]
+test-paths: [tests]
+target-path: target
+clean-targets: [target, dbt_packages]
+
+vars:
+  # Raw CSVs written by scripts/fetch-cta.mjs, relative to this folder.
+  raw_path: data/raw
+
+models:
+  cta_transit:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table
+
+seeds:
+  cta_transit:
+    +column_types:
+      sort_order: integer

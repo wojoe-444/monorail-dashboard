@@ -1,0 +1,192 @@
+# MetricFlow semantic models. This file and metrics.yml are the single source of truth for every
+# number on the dashboard: `npm run data:build` compiles them (dbt parse -> semantic_manifest.json)
+# into src/features/semantic/manifest.json, which the in-browser engine executes.
+#
+# Browser engine constraints (checked by scripts/build-data.mjs):
+#   - measure and dimension `expr` is a plain column name of the model
+#   - filters are ANDed comparisons: {{ Dimension('a__b') }} = | != | in (...) 'value'
+semantic_models:
+  - name: rail_station_entries
+    description: "'L' turnstile entries, one row per station per service day."
+    model: ref('fct_rail_station_entries')
+    defaults:
+      agg_time_dimension: ride_date
+    primary_entity: rail_station_day
+    entities:
+      - name: station
+        type: foreign
+        expr: station_id
+      - name: service_day
+        type: foreign
+        expr: ride_date
+    dimensions:
+      - name: ride_date
+        label: Service date
+        type: time
+        type_params:
+          time_granularity: day
+    measures:
+      - name: rail_entries
+        label: Rail entries
+        description: Turnstile entries at 'L' stations. Transfers between lines inside the paid area are not counted.
+        agg: sum
+        expr: rides
+      - name: rail_service_days
+        label: Rail service days
+        description: Distinct service days with reported entries.
+        agg: count_distinct
+        expr: ride_date
+      - name: rail_stations_reporting
+        label: Stations reporting
+        description: Distinct stations with a reported count (a zero counts as reported).
+        agg: count_distinct
+        expr: station_id
+
+  - name: rail_line_entries
+    description: "'L' entries by line, one row per station per line per service day."
+    model: ref('fct_rail_line_entries')
+    defaults:
+      agg_time_dimension: ride_date
+    primary_entity: rail_line_station_day
+    entities:
+      - name: station
+        type: foreign
+        expr: station_id
+      - name: line
+        type: foreign
+        expr: line_id
+      - name: service_day
+        type: foreign
+        expr: ride_date
+    dimensions:
+      - name: ride_date
+        label: Service date
+        type: time
+        type_params:
+          time_granularity: day
+    measures:
+      - name: line_entries_allocated
+        label: Line entries (allocated)
+        description: Station entries split evenly across the lines serving the station. Sums to the system total.
+        agg: sum
+        expr: rides_allocated
+      - name: line_station_entries
+        label: Entries at line stations
+        description: Full entries at every station the line serves; transfer stations count for each line. Never sum across lines.
+        agg: sum
+        expr: station_rides
+      - name: line_service_days
+        label: Line service days
+        agg: count_distinct
+        expr: ride_date
+
+  - name: bus_route_rides
+    description: Bus boardings, one row per route per service day.
+    model: ref('fct_bus_route_rides')
+    defaults:
+      agg_time_dimension: ride_date
+    primary_entity: bus_route_day
+    entities:
+      - name: route
+        type: foreign
+        expr: route_id
+      - name: service_day
+        type: foreign
+        expr: ride_date
+    dimensions:
+      - name: ride_date
+        label: Service date
+        type: time
+        type_params:
+          time_granularity: day
+    measures:
+      - name: bus_boardings
+        label: Bus boardings
+        description: Boardings on CTA buses. A trip with a bus-to-bus transfer counts once per bus.
+        agg: sum
+        expr: rides
+      - name: bus_service_days
+        label: Bus service days
+        agg: count_distinct
+        expr: ride_date
+      - name: bus_routes_reporting
+        label: Routes reporting
+        agg: count_distinct
+        expr: route_id
+
+  - name: stations
+    description: "'L' stations."
+    model: ref('dim_stations')
+    entities:
+      - name: station
+        type: primary
+        expr: station_id
+    dimensions:
+      - name: station_name
+        label: Station
+        type: categorical
+      - name: sector
+        label: Sector
+        description: Approximate sector from the bearing to State & Madison; Loop inside the elevated Loop.
+        type: categorical
+      - name: lines
+        label: Lines served
+        type: categorical
+      - name: ada_accessible
+        label: ADA accessible
+        type: categorical
+      - name: is_transfer_station
+        label: Transfer station
+        description: Served by more than one line.
+        type: categorical
+
+  - name: lines
+    description: "'L' routes."
+    model: ref('dim_lines')
+    entities:
+      - name: line
+        type: primary
+        expr: line_id
+    dimensions:
+      - name: line_name
+        label: Line
+        type: categorical
+
+  - name: bus_routes
+    description: Bus routes.
+    model: ref('dim_bus_routes')
+    entities:
+      - name: route
+        type: primary
+        expr: route_id
+    dimensions:
+      - name: route_name
+        label: Route name
+        type: categorical
+      - name: route_type
+        label: Route type
+        description: Express (X routes), Shuttle (1000-series rail-replacement buses) or Local.
+        type: categorical
+
+  - name: service_days
+    description: Calendar days with the CTA day type (holidays run a Sunday schedule).
+    model: ref('dim_service_days')
+    entities:
+      - name: service_day
+        type: primary
+        expr: ride_date
+    dimensions:
+      - name: day_type
+        label: Day type
+        description: Weekday, Saturday, or Sunday/Holiday, as the CTA scheduled the day.
+        type: categorical
+      - name: is_holiday
+        label: Holiday
+        description: A Monday-Saturday the CTA ran a Sunday schedule.
+        type: categorical
+      - name: day_of_week
+        label: Day of week
+        type: categorical
+      - name: is_weekend
+        label: Weekend
+        type: categorical

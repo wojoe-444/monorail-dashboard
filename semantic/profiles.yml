@@ -1,0 +1,9 @@
+# Local DuckDB warehouse. dbt reads profiles.yml from the working directory,
+# so run dbt and mf from this folder (npm run data:build does).
+cta_transit:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: target/cta.duckdb
+      threads: 4

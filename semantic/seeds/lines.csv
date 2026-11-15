@@ -1,0 +1,9 @@
+line_id,line_name,color_hex,sort_order
+red,Red,#c60c30,1
+blue,Blue,#00a1de,2
+brown,Brown,#62361b,3
+green,Green,#009b3a,4
+orange,Orange,#f9461c,5
+purple,Purple,#522398,6
+pink,Pink,#e27ea6,7
+yellow,Yellow,#f9e300,8
