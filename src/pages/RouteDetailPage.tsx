@@ -86,7 +86,7 @@ function RouteDetail({ routeId }: { routeId: string }) {
   const cells = []
   for (let d = dayOfIso(year.start); d <= ds.maxDay; d++) cells.push({ day: d, value: num(calBy.get(d)?.[calendar === 'volume' ? 'bus_boardings' : 'bus_boardings_yoy']) })
 
-  const exceptions = detectExceptions(ds, { start: dayOfIso(year.start), end: ds.maxDay, threshold: 0.35, minExpected: 150, modes: ['bus'], entityIds: [route.id] })
+  const exceptions = detectExceptions(ds, { start: Math.min(dayOfIso(window.start), dayOfIso(year.start)), end: dayOfIso(window.end), threshold: 0.35, minExpected: 150, modes: ['bus'], entityIds: [route.id] })
 
   return (
     <div className="flex flex-col gap-8">

@@ -1,10 +1,17 @@
--- One row per calendar day in the ridership window. Day type comes from the CTA feeds:
+-- One row per calendar day that both the rail and the bus feed cover. Day type comes from the CTA feeds:
 -- a weekday the CTA ran a Sunday schedule (a holiday) has day type "Sunday/Holiday".
-with spine as (
+-- The dashboard's date range is this window, so a feed refreshed further than the other cannot
+-- show days the other mode has no data for.
+with bounds as (
+    select
+        greatest((select min(ride_date) from {{ ref('stg_rail_station_entries') }}), (select min(ride_date) from {{ ref('stg_bus_route_rides') }})) as first_day,
+        least((select max(ride_date) from {{ ref('stg_rail_station_entries') }}), (select max(ride_date) from {{ ref('stg_bus_route_rides') }})) as last_day
+),
+
+spine as (
     select date_day
-    from {{ ref('metricflow_time_spine') }}
-    where date_day between (select min(ride_date) from {{ ref('stg_rail_station_entries') }})
-                       and (select max(ride_date) from {{ ref('stg_rail_station_entries') }})
+    from {{ ref('metricflow_time_spine') }}, bounds
+    where date_day between bounds.first_day and bounds.last_day
 ),
 
 codes as (

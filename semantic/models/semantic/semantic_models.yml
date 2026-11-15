@@ -67,7 +67,7 @@ semantic_models:
     measures:
       - name: line_entries_allocated
         label: Line entries (allocated)
-        description: Station entries split evenly across the lines serving the station. Sums to the system total.
+        description: Station entries split evenly across the lines that run there all day (no share for the Purple Line Express south of Howard). Sums to the system total.
         agg: sum
         expr: rides_allocated
       - name: line_station_entries

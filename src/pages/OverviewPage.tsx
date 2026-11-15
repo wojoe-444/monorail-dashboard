@@ -18,7 +18,7 @@ import type { QueryResult } from '@/features/semantic/core/types.ts'
 import { useDataset } from '@/features/semantic/data'
 import { formatCompact, formatDay, formatPercent, formatPeriod, formatRange, formatSignedPercent, formatValue, ratioOf } from '@/features/semantic/format'
 import { pivotResult } from '@/features/semantic/pivot'
-import { baseline2019, priorYear, recentWeeks, resolveRange } from '@/features/semantic/ranges'
+import { baseline2019, countHolidays, priorYear, recentWeeks, resolveRange } from '@/features/semantic/ranges'
 import { useQueryOrThrow } from '@/features/semantic/useQuery'
 import { useRangeParam } from '@/features/semantic/useRangeParam'
 import type { ViewSpec } from '@/features/semantic/views'
@@ -61,6 +61,10 @@ export function OverviewPage() {
     timeRange: window,
   }).rows[0] ?? {}
   const base = baseline2019(window)
+  // A total against a window with a different number of holidays (Labor Day in one, not the other) is not a like-for-like change.
+  const holidaysNow = countHolidays(ds.holidays, window)
+  const holidaysLy = countHolidays(ds.holidays, priorYear(window))
+  const holidayMismatch = holidaysNow !== holidaysLy
   const kpi2019 = useQueryOrThrow({ metrics: ['total_avg_weekday_rides', 'rail_avg_weekday_entries', 'bus_avg_weekday_boardings'], timeRange: base ?? window }).rows[0] ?? {}
   const weekdayLy = (num(kpi.rail_avg_weekday_entries_ly) ?? 0) + (num(kpi.bus_avg_weekday_boardings_ly) ?? 0) || null
   const weekdayNow = num(kpi.total_avg_weekday_rides)
@@ -129,7 +133,8 @@ export function OverviewPage() {
   })
   const stationRows = stations.rows.filter((r) => num(r.rail_avg_weekday_entries) !== null)
   const busiest = [...stationRows].sort((a, b) => (b.rail_avg_weekday_entries as number) - (a.rail_avg_weekday_entries as number)).slice(0, 10)
-  const movers = stationRows.filter((r) => (num(r.rail_avg_weekday_entries_ly) ?? 0) >= 1000 && num(r.rail_avg_weekday_yoy) !== null)
+  // Closed stations (zero entries now) are not demand changes: they are listed on Exceptions instead.
+  const movers = stationRows.filter((r) => (num(r.rail_avg_weekday_entries_ly) ?? 0) >= 1000 && num(r.rail_avg_weekday_yoy) !== null && (num(r.rail_avg_weekday_entries) ?? 0) > 0)
   const gainers = [...movers].sort((a, b) => (b.rail_avg_weekday_yoy as number) - (a.rail_avg_weekday_yoy as number)).slice(0, 5)
   const decliners = [...movers].sort((a, b) => (a.rail_avg_weekday_yoy as number) - (b.rail_avg_weekday_yoy as number)).slice(0, 5)
 
@@ -190,9 +195,15 @@ export function OverviewPage() {
         <StatTile
           label="Total rides in period"
           value={formatCompact(num(kpi.total_rides))}
-          delta={num(kpi.total_rides_yoy) ?? undefined}
+          delta={holidayMismatch ? undefined : (num(kpi.total_rides_yoy) ?? undefined)}
           deltaLabel="vs 52 wks"
-          hint={num(kpi.rail_share) !== null ? `· rail ${formatPercent(kpi.rail_share as number, 0)}` : undefined}
+          hint={
+            holidayMismatch
+              ? `Not compared: ${holidaysNow} holiday${holidaysNow === 1 ? '' : 's'} now vs ${holidaysLy} 52 weeks earlier`
+              : num(kpi.rail_share) !== null
+                ? `· rail ${formatPercent(kpi.rail_share as number, 0)}`
+                : undefined
+          }
           trend={<Sparkline data={sparkOf('total_rides')} className="text-muted-foreground" />}
         />
       </div>
@@ -297,7 +308,7 @@ export function OverviewPage() {
         <Card className="gap-4">
           <CardHeader>
             <CardTitle>Biggest movers</CardTitle>
-            <CardDescription>Weekday entries vs 52 weeks earlier, stations with 1,000+ a year ago.</CardDescription>
+            <CardDescription>Weekday entries vs 52 weeks earlier, stations with 1,000+ a year ago. Closed stations are on Exceptions.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <MoverList title="Up" rows={gainers} />
@@ -308,7 +319,7 @@ export function OverviewPage() {
         <Card className="gap-4">
           <CardHeader>
             <CardTitle>Lines</CardTitle>
-            <CardDescription>Average weekday entries, split evenly at transfer stations.</CardDescription>
+            <CardDescription>Average weekday entries, split across the all-day lines at transfer stations.</CardDescription>
             <CardAction>
               <Button variant="ghost" size="sm" onClick={() => navigate('/lines')}>
                 All lines

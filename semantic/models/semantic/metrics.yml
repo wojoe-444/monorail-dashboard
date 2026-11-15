@@ -402,7 +402,7 @@ metrics:
   # ---- Line --------------------------------------------------------
   - name: line_entries_allocated
     label: "Line entries (allocated)"
-    description: "Station entries split evenly across the lines serving each station. Lines sum to the system total."
+    description: "Station entries split evenly across the lines that run there all day (the Purple Line Express gets no share at its rush-only stops south of Howard). Lines sum to the system total."
     type: simple
     type_params:
       measure: line_entries_allocated

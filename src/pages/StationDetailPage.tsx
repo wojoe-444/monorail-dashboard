@@ -105,7 +105,9 @@ function StationDetail({ stationId }: { stationId: string }) {
     cells.push({ day: d, value: calendar === 'volume' ? num(r?.rail_entries) : num(r?.rail_entries_yoy) })
   }
 
-  const exceptions = detectExceptions(ds, { start: dayOfIso(year.start), end: ds.maxDay, threshold: 0.35, minExpected: 200, modes: ['rail'], entityIds: [station.id] })
+  // Exceptions over the selected period, or the last 12 months when the period is shorter (markers and the list agree).
+  const excStart = Math.min(dayOfIso(window.start), dayOfIso(year.start))
+  const exceptions = detectExceptions(ds, { start: excStart, end: dayOfIso(window.end), threshold: 0.35, minExpected: 200, modes: ['rail'], entityIds: [station.id] })
 
   // An ongoing zero-count or no-data episode is a closure or a feed outage: say so up top.
   const outage = exceptions.find((e) => e.ongoing && (e.kind === 'zero' || e.kind === 'missing'))
@@ -272,7 +274,7 @@ function StationDetail({ stationId }: { stationId: string }) {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card className="gap-4 xl:col-span-2">
           <CardHeader>
-            <CardTitle>Exceptions, last 12 months</CardTitle>
+            <CardTitle>Exceptions{dayOfIso(window.start) < dayOfIso(year.start) ? `, ${formatRange(window.start, window.end)}` : ', last 12 months'}</CardTitle>
             <CardDescription>Days 35%+ off the usual pattern for that weekday (median of the previous 8 weeks).</CardDescription>
           </CardHeader>
           <CardContent>

@@ -17,7 +17,7 @@ import type { QueryResult } from '@/features/semantic/core/types.ts'
 import { downloadCsv } from '@/features/semantic/csv'
 import { useDataset, type Station } from '@/features/semantic/data'
 import { formatCompact, formatPercent, formatValue } from '@/features/semantic/format'
-import { baseline2019, countDayType, recentWeeks } from '@/features/semantic/ranges'
+import { baseline2019, countDayType, recentWeeks, weekStarts } from '@/features/semantic/ranges'
 import { useQueryOrThrow } from '@/features/semantic/useQuery'
 import { useRangeParam } from '@/features/semantic/useRangeParam'
 import { exploreHref } from '@/features/semantic/views'
@@ -62,11 +62,14 @@ export function StationsPage() {
 
   const byStation = new Map(current.rows.map((r) => [String(r.station), r]))
   const baseBy = new Map(before.rows.map((r) => [String(r.station), num(r.rail_avg_weekday_entries)]))
+  // One slot per week, so a missing week stays a gap at its own position instead of shifting the line.
+  const weeks = weekStarts(recentWeeks(ds.maxDay))
   const trendBy = new Map<string, number[]>()
   for (const r of weekly.rows) {
     const k = String(r.station)
-    const arr = trendBy.get(k) ?? []
-    arr.push(num(r.rail_entries) ?? 0)
+    const arr = trendBy.get(k) ?? weeks.map(() => 0)
+    const i = weeks.indexOf(String(r.metric_time__week))
+    if (i >= 0) arr[i] = num(r.rail_entries) ?? 0
     trendBy.set(k, arr)
   }
   const systemEntries = current.rows.reduce((a, r) => a + (num(r.rail_entries) ?? 0), 0)
@@ -112,9 +115,10 @@ export function StationsPage() {
       render: (r) => (
         <a href={href(`/rail/station?id=${r.station.id}`)} className="flex min-w-0 flex-col rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
           <span className="truncate font-medium">{r.station.name}</span>
-          <span className="text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             {r.station.sector}
             {r.station.lastDay !== null && r.station.lastDay < ds.maxDay - 30 ? ' · no recent data' : ''}
+            {r.entries === 0 && <Badge variant="destructive">Reporting zero</Badge>}
           </span>
         </a>
       ),

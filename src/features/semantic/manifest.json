@@ -57,66 +57,6 @@
    ]
   },
   {
-   "name": "rail_line_entries",
-   "description": "'L' entries by line, one row per station per line per service day.",
-   "table": "fct_rail_line_entries",
-   "primaryEntity": "rail_line_station_day",
-   "aggTimeDimension": "ride_date",
-   "entities": [
-    {
-     "name": "station",
-     "type": "foreign",
-     "expr": "station_id"
-    },
-    {
-     "name": "line",
-     "type": "foreign",
-     "expr": "line_id"
-    },
-    {
-     "name": "service_day",
-     "type": "foreign",
-     "expr": "ride_date"
-    }
-   ],
-   "dimensions": [
-    {
-     "name": "ride_date",
-     "type": "time",
-     "expr": "ride_date",
-     "label": "Service date",
-     "description": null,
-     "grain": "day"
-    }
-   ],
-   "measures": [
-    {
-     "name": "line_entries_allocated",
-     "agg": "sum",
-     "expr": "rides_allocated",
-     "label": "Line entries (allocated)",
-     "description": "Station entries split evenly across the lines serving the station. Sums to the system total.",
-     "aggTimeDimension": null
-    },
-    {
-     "name": "line_station_entries",
-     "agg": "sum",
-     "expr": "station_rides",
-     "label": "Entries at line stations",
-     "description": "Full entries at every station the line serves; transfer stations count for each line. Never sum across lines.",
-     "aggTimeDimension": null
-    },
-    {
-     "name": "line_service_days",
-     "agg": "count_distinct",
-     "expr": "ride_date",
-     "label": "Line service days",
-     "description": null,
-     "aggTimeDimension": null
-    }
-   ]
-  },
-  {
    "name": "bus_route_rides",
    "description": "Bus boardings, one row per route per service day.",
    "table": "fct_bus_route_rides",
@@ -322,6 +262,66 @@
     }
    ],
    "measures": []
+  },
+  {
+   "name": "rail_line_entries",
+   "description": "'L' entries by line, one row per station per line per service day.",
+   "table": "fct_rail_line_entries",
+   "primaryEntity": "rail_line_station_day",
+   "aggTimeDimension": "ride_date",
+   "entities": [
+    {
+     "name": "station",
+     "type": "foreign",
+     "expr": "station_id"
+    },
+    {
+     "name": "line",
+     "type": "foreign",
+     "expr": "line_id"
+    },
+    {
+     "name": "service_day",
+     "type": "foreign",
+     "expr": "ride_date"
+    }
+   ],
+   "dimensions": [
+    {
+     "name": "ride_date",
+     "type": "time",
+     "expr": "ride_date",
+     "label": "Service date",
+     "description": null,
+     "grain": "day"
+    }
+   ],
+   "measures": [
+    {
+     "name": "line_entries_allocated",
+     "agg": "sum",
+     "expr": "rides_allocated",
+     "label": "Line entries (allocated)",
+     "description": "Station entries split evenly across the lines that run there all day (no share for the Purple Line Express south of Howard). Sums to the system total.",
+     "aggTimeDimension": null
+    },
+    {
+     "name": "line_station_entries",
+     "agg": "sum",
+     "expr": "station_rides",
+     "label": "Entries at line stations",
+     "description": "Full entries at every station the line serves; transfer stations count for each line. Never sum across lines.",
+     "aggTimeDimension": null
+    },
+    {
+     "name": "line_service_days",
+     "agg": "count_distinct",
+     "expr": "ride_date",
+     "label": "Line service days",
+     "description": null,
+     "aggTimeDimension": null
+    }
+   ]
   }
  ],
  "metrics": [
@@ -491,6 +491,70 @@
      "name": "rail_entries",
      "alias": "rail_entries_ly",
      "filter": [],
+     "offsetDays": 364
+    }
+   ]
+  },
+  {
+   "name": "rail_avg_weekday_entries_ly",
+   "label": "Avg weekday rail entries, 52 weeks earlier",
+   "description": "Average weekday rail entries for the same period 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday).",
+   "type": "derived",
+   "filter": [],
+   "category": "Rail",
+   "format": "number",
+   "numerator": null,
+   "denominator": null,
+   "expr": "wk_num_ly / nullif(wk_den_ly, 0)",
+   "inputs": [
+    {
+     "name": "rail_entries",
+     "alias": "wk_num_ly",
+     "filter": [
+      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+     ],
+     "offsetDays": 364
+    },
+    {
+     "name": "rail_service_days",
+     "alias": "wk_den_ly",
+     "filter": [
+      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+     ],
+     "offsetDays": 364
+    }
+   ]
+  },
+  {
+   "name": "rail_avg_weekday_yoy",
+   "label": "Avg weekday rail entries vs 52 weeks earlier",
+   "description": "Change in average weekday rail entries vs 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday).",
+   "type": "derived",
+   "filter": [],
+   "category": "Rail",
+   "format": "percent",
+   "numerator": null,
+   "denominator": null,
+   "expr": "(rail_avg_weekday_entries - wk_num_ly / nullif(wk_den_ly, 0)) / nullif(wk_num_ly / nullif(wk_den_ly, 0), 0)",
+   "inputs": [
+    {
+     "name": "rail_avg_weekday_entries",
+     "filter": []
+    },
+    {
+     "name": "rail_entries",
+     "alias": "wk_num_ly",
+     "filter": [
+      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+     ],
+     "offsetDays": 364
+    },
+    {
+     "name": "rail_service_days",
+     "alias": "wk_den_ly",
+     "filter": [
+      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+     ],
      "offsetDays": 364
     }
    ]
@@ -666,6 +730,70 @@
    ]
   },
   {
+   "name": "bus_avg_weekday_boardings_ly",
+   "label": "Avg weekday bus boardings, 52 weeks earlier",
+   "description": "Average weekday bus boardings 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday).",
+   "type": "derived",
+   "filter": [],
+   "category": "Bus",
+   "format": "number",
+   "numerator": null,
+   "denominator": null,
+   "expr": "wk_num_ly / nullif(wk_den_ly, 0)",
+   "inputs": [
+    {
+     "name": "bus_boardings",
+     "alias": "wk_num_ly",
+     "filter": [
+      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+     ],
+     "offsetDays": 364
+    },
+    {
+     "name": "bus_service_days",
+     "alias": "wk_den_ly",
+     "filter": [
+      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+     ],
+     "offsetDays": 364
+    }
+   ]
+  },
+  {
+   "name": "bus_avg_weekday_yoy",
+   "label": "Avg weekday bus boardings vs 52 weeks earlier",
+   "description": "Change in average weekday bus boardings vs 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday).",
+   "type": "derived",
+   "filter": [],
+   "category": "Bus",
+   "format": "percent",
+   "numerator": null,
+   "denominator": null,
+   "expr": "(bus_avg_weekday_boardings - wk_num_ly / nullif(wk_den_ly, 0)) / nullif(wk_num_ly / nullif(wk_den_ly, 0), 0)",
+   "inputs": [
+    {
+     "name": "bus_avg_weekday_boardings",
+     "filter": []
+    },
+    {
+     "name": "bus_boardings",
+     "alias": "wk_num_ly",
+     "filter": [
+      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+     ],
+     "offsetDays": 364
+    },
+    {
+     "name": "bus_service_days",
+     "alias": "wk_den_ly",
+     "filter": [
+      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+     ],
+     "offsetDays": 364
+    }
+   ]
+  },
+  {
    "name": "total_rides",
    "label": "Total rides (rail + bus)",
    "description": "Rail entries plus bus boardings. Mixes two counting methods (entries vs boardings), as the CTA does in its own totals.",
@@ -684,6 +812,66 @@
     {
      "name": "bus_boardings",
      "filter": []
+    }
+   ]
+  },
+  {
+   "name": "total_rides_ly",
+   "label": "Total rides, 52 weeks earlier",
+   "description": "Rail entries plus bus boardings 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday).",
+   "type": "derived",
+   "filter": [],
+   "category": "System",
+   "format": "number",
+   "numerator": null,
+   "denominator": null,
+   "expr": "rail_ly + bus_ly",
+   "inputs": [
+    {
+     "name": "rail_entries",
+     "alias": "rail_ly",
+     "filter": [],
+     "offsetDays": 364
+    },
+    {
+     "name": "bus_boardings",
+     "alias": "bus_ly",
+     "filter": [],
+     "offsetDays": 364
+    }
+   ]
+  },
+  {
+   "name": "total_rides_yoy",
+   "label": "Total rides vs 52 weeks earlier",
+   "description": "Change in total rides vs 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday).",
+   "type": "derived",
+   "filter": [],
+   "category": "System",
+   "format": "percent",
+   "numerator": null,
+   "denominator": null,
+   "expr": "(rail_entries + bus_boardings - rail_ly - bus_ly) / nullif(rail_ly + bus_ly, 0)",
+   "inputs": [
+    {
+     "name": "rail_entries",
+     "filter": []
+    },
+    {
+     "name": "bus_boardings",
+     "filter": []
+    },
+    {
+     "name": "rail_entries",
+     "alias": "rail_ly",
+     "filter": [],
+     "offsetDays": 364
+    },
+    {
+     "name": "bus_boardings",
+     "alias": "bus_ly",
+     "filter": [],
+     "offsetDays": 364
     }
    ]
   },
@@ -732,54 +920,6 @@
    ]
   },
   {
-   "name": "line_entries_allocated",
-   "label": "Line entries (allocated)",
-   "description": "Station entries split evenly across the lines serving each station. Lines sum to the system total.",
-   "type": "simple",
-   "filter": [],
-   "category": "Line",
-   "format": "number",
-   "measure": {
-    "name": "line_entries_allocated",
-    "filter": []
-   },
-   "numerator": null,
-   "denominator": null,
-   "inputs": []
-  },
-  {
-   "name": "line_station_entries",
-   "label": "Entries at line stations",
-   "description": "Full entries at every station on the line; a transfer station counts toward each of its lines. Shows a line's reach. Never sum across lines.",
-   "type": "simple",
-   "filter": [],
-   "category": "Line",
-   "format": "number",
-   "measure": {
-    "name": "line_station_entries",
-    "filter": []
-   },
-   "numerator": null,
-   "denominator": null,
-   "inputs": []
-  },
-  {
-   "name": "line_service_days",
-   "label": "Line service days",
-   "description": "Distinct service days with entries on the line.",
-   "type": "simple",
-   "filter": [],
-   "category": "Line",
-   "format": "number",
-   "measure": {
-    "name": "line_service_days",
-    "filter": []
-   },
-   "numerator": null,
-   "denominator": null,
-   "inputs": []
-  },
-  {
    "name": "line_avg_daily_allocated",
    "label": "Avg daily line entries (allocated)",
    "description": "Allocated line entries per service day.",
@@ -796,6 +936,40 @@
     "filter": []
    },
    "inputs": []
+  },
+  {
+   "name": "line_avg_weekday_yoy",
+   "label": "Avg weekday line entries vs 52 weeks earlier",
+   "description": "Change in allocated line entries per weekday vs 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday).",
+   "type": "derived",
+   "filter": [],
+   "category": "Line",
+   "format": "percent",
+   "numerator": null,
+   "denominator": null,
+   "expr": "(line_avg_weekday_allocated - wk_num_ly / nullif(wk_den_ly, 0)) / nullif(wk_num_ly / nullif(wk_den_ly, 0), 0)",
+   "inputs": [
+    {
+     "name": "line_avg_weekday_allocated",
+     "filter": []
+    },
+    {
+     "name": "line_entries_allocated",
+     "alias": "wk_num_ly",
+     "filter": [
+      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+     ],
+     "offsetDays": 364
+    },
+    {
+     "name": "line_service_days",
+     "alias": "wk_den_ly",
+     "filter": [
+      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+     ],
+     "offsetDays": 364
+    }
+   ]
   },
   {
    "name": "line_avg_weekday_allocated",
@@ -848,226 +1022,52 @@
    ]
   },
   {
-   "name": "bus_avg_weekday_yoy",
-   "label": "Avg weekday bus boardings vs 52 weeks earlier",
-   "description": "Change in average weekday bus boardings vs 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday).",
-   "type": "derived",
-   "filter": [],
-   "category": "Bus",
-   "format": "percent",
-   "numerator": null,
-   "denominator": null,
-   "expr": "(bus_avg_weekday_boardings - wk_num_ly / nullif(wk_den_ly, 0)) / nullif(wk_num_ly / nullif(wk_den_ly, 0), 0)",
-   "inputs": [
-    {
-     "name": "bus_avg_weekday_boardings",
-     "filter": []
-    },
-    {
-     "name": "bus_boardings",
-     "alias": "wk_num_ly",
-     "filter": [
-      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
-     ],
-     "offsetDays": 364
-    },
-    {
-     "name": "bus_service_days",
-     "alias": "wk_den_ly",
-     "filter": [
-      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
-     ],
-     "offsetDays": 364
-    }
-   ]
-  },
-  {
-   "name": "total_rides_ly",
-   "label": "Total rides, 52 weeks earlier",
-   "description": "Rail entries plus bus boardings 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday).",
-   "type": "derived",
-   "filter": [],
-   "category": "System",
-   "format": "number",
-   "numerator": null,
-   "denominator": null,
-   "expr": "rail_ly + bus_ly",
-   "inputs": [
-    {
-     "name": "rail_entries",
-     "alias": "rail_ly",
-     "filter": [],
-     "offsetDays": 364
-    },
-    {
-     "name": "bus_boardings",
-     "alias": "bus_ly",
-     "filter": [],
-     "offsetDays": 364
-    }
-   ]
-  },
-  {
-   "name": "line_avg_weekday_yoy",
-   "label": "Avg weekday line entries vs 52 weeks earlier",
-   "description": "Change in allocated line entries per weekday vs 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday).",
-   "type": "derived",
+   "name": "line_service_days",
+   "label": "Line service days",
+   "description": "Distinct service days with entries on the line.",
+   "type": "simple",
    "filter": [],
    "category": "Line",
-   "format": "percent",
-   "numerator": null,
-   "denominator": null,
-   "expr": "(line_avg_weekday_allocated - wk_num_ly / nullif(wk_den_ly, 0)) / nullif(wk_num_ly / nullif(wk_den_ly, 0), 0)",
-   "inputs": [
-    {
-     "name": "line_avg_weekday_allocated",
-     "filter": []
-    },
-    {
-     "name": "line_entries_allocated",
-     "alias": "wk_num_ly",
-     "filter": [
-      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
-     ],
-     "offsetDays": 364
-    },
-    {
-     "name": "line_service_days",
-     "alias": "wk_den_ly",
-     "filter": [
-      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
-     ],
-     "offsetDays": 364
-    }
-   ]
-  },
-  {
-   "name": "total_rides_yoy",
-   "label": "Total rides vs 52 weeks earlier",
-   "description": "Change in total rides vs 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday).",
-   "type": "derived",
-   "filter": [],
-   "category": "System",
-   "format": "percent",
-   "numerator": null,
-   "denominator": null,
-   "expr": "(rail_entries + bus_boardings - rail_ly - bus_ly) / nullif(rail_ly + bus_ly, 0)",
-   "inputs": [
-    {
-     "name": "rail_entries",
-     "filter": []
-    },
-    {
-     "name": "bus_boardings",
-     "filter": []
-    },
-    {
-     "name": "rail_entries",
-     "alias": "rail_ly",
-     "filter": [],
-     "offsetDays": 364
-    },
-    {
-     "name": "bus_boardings",
-     "alias": "bus_ly",
-     "filter": [],
-     "offsetDays": 364
-    }
-   ]
-  },
-  {
-   "name": "bus_avg_weekday_boardings_ly",
-   "label": "Avg weekday bus boardings, 52 weeks earlier",
-   "description": "Average weekday bus boardings 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday).",
-   "type": "derived",
-   "filter": [],
-   "category": "Bus",
    "format": "number",
+   "measure": {
+    "name": "line_service_days",
+    "filter": []
+   },
    "numerator": null,
    "denominator": null,
-   "expr": "wk_num_ly / nullif(wk_den_ly, 0)",
-   "inputs": [
-    {
-     "name": "bus_boardings",
-     "alias": "wk_num_ly",
-     "filter": [
-      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
-     ],
-     "offsetDays": 364
-    },
-    {
-     "name": "bus_service_days",
-     "alias": "wk_den_ly",
-     "filter": [
-      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
-     ],
-     "offsetDays": 364
-    }
-   ]
+   "inputs": []
   },
   {
-   "name": "rail_avg_weekday_entries_ly",
-   "label": "Avg weekday rail entries, 52 weeks earlier",
-   "description": "Average weekday rail entries for the same period 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday).",
-   "type": "derived",
+   "name": "line_station_entries",
+   "label": "Entries at line stations",
+   "description": "Full entries at every station on the line; a transfer station counts toward each of its lines. Shows a line's reach. Never sum across lines.",
+   "type": "simple",
    "filter": [],
-   "category": "Rail",
+   "category": "Line",
    "format": "number",
+   "measure": {
+    "name": "line_station_entries",
+    "filter": []
+   },
    "numerator": null,
    "denominator": null,
-   "expr": "wk_num_ly / nullif(wk_den_ly, 0)",
-   "inputs": [
-    {
-     "name": "rail_entries",
-     "alias": "wk_num_ly",
-     "filter": [
-      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
-     ],
-     "offsetDays": 364
-    },
-    {
-     "name": "rail_service_days",
-     "alias": "wk_den_ly",
-     "filter": [
-      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
-     ],
-     "offsetDays": 364
-    }
-   ]
+   "inputs": []
   },
   {
-   "name": "rail_avg_weekday_yoy",
-   "label": "Avg weekday rail entries vs 52 weeks earlier",
-   "description": "Change in average weekday rail entries vs 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday).",
-   "type": "derived",
+   "name": "line_entries_allocated",
+   "label": "Line entries (allocated)",
+   "description": "Station entries split evenly across the lines that run there all day (the Purple Line Express gets no share at its rush-only stops south of Howard). Lines sum to the system total.",
+   "type": "simple",
    "filter": [],
-   "category": "Rail",
-   "format": "percent",
+   "category": "Line",
+   "format": "number",
+   "measure": {
+    "name": "line_entries_allocated",
+    "filter": []
+   },
    "numerator": null,
    "denominator": null,
-   "expr": "(rail_avg_weekday_entries - wk_num_ly / nullif(wk_den_ly, 0)) / nullif(wk_num_ly / nullif(wk_den_ly, 0), 0)",
-   "inputs": [
-    {
-     "name": "rail_avg_weekday_entries",
-     "filter": []
-    },
-    {
-     "name": "rail_entries",
-     "alias": "wk_num_ly",
-     "filter": [
-      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
-     ],
-     "offsetDays": 364
-    },
-    {
-     "name": "rail_service_days",
-     "alias": "wk_den_ly",
-     "filter": [
-      "{{ Dimension('service_day__day_type') }} = 'Weekday'"
-     ],
-     "offsetDays": 364
-    }
-   ]
+   "inputs": []
   }
  ],
  "savedQueries": [
@@ -1090,21 +1090,27 @@
    }
   },
   {
-   "name": "weekday_by_line_monthly",
-   "label": "Weekday entries by line, monthly",
-   "description": "Average weekday entries per line (allocated at transfer stations), by month.",
+   "name": "station_weekday_ranking",
+   "label": "Station ranking, weekday entries",
+   "description": "Average weekday, Saturday and Sunday/holiday entries per station, busiest first.",
    "metrics": [
-    "line_avg_weekday_allocated"
+    "rail_avg_weekday_entries",
+    "rail_avg_saturday_entries",
+    "rail_avg_sunday_entries"
    ],
    "groupBy": [
-    "metric_time__month",
-    "line__line_name"
+    "station__station_name"
    ],
    "where": [],
-   "orderBy": [],
+   "orderBy": [
+    {
+     "key": "rail_avg_weekday_entries",
+     "desc": true
+    }
+   ],
    "meta": {
-    "chart": "line",
-    "range": "all"
+    "chart": "table",
+    "range": "28d"
    }
   },
   {
@@ -1123,6 +1129,48 @@
    "meta": {
     "chart": "line",
     "range": "all"
+   }
+  },
+  {
+   "name": "day_type_mix_monthly",
+   "label": "Rides by day type, monthly",
+   "description": "Total rides (rail + bus) split by CTA day type, by month.",
+   "metrics": [
+    "total_rides"
+   ],
+   "groupBy": [
+    "metric_time__month",
+    "service_day__day_type"
+   ],
+   "where": [],
+   "orderBy": [],
+   "meta": {
+    "chart": "stacked",
+    "range": "3y"
+   }
+  },
+  {
+   "name": "bus_route_ranking",
+   "label": "Bus route ranking, weekday boardings",
+   "description": "Average weekday, Saturday and Sunday/holiday boardings per route, busiest first.",
+   "metrics": [
+    "bus_avg_weekday_boardings",
+    "bus_avg_saturday_boardings",
+    "bus_avg_sunday_boardings"
+   ],
+   "groupBy": [
+    "route__route_name"
+   ],
+   "where": [],
+   "orderBy": [
+    {
+     "key": "bus_avg_weekday_boardings",
+     "desc": true
+    }
+   ],
+   "meta": {
+    "chart": "table",
+    "range": "28d"
    }
   },
   {
@@ -1161,69 +1209,21 @@
    }
   },
   {
-   "name": "bus_route_ranking",
-   "label": "Bus route ranking, weekday boardings",
-   "description": "Average weekday, Saturday and Sunday/holiday boardings per route, busiest first.",
+   "name": "weekday_by_line_monthly",
+   "label": "Weekday entries by line, monthly",
+   "description": "Average weekday entries per line (allocated at transfer stations), by month.",
    "metrics": [
-    "bus_avg_weekday_boardings",
-    "bus_avg_saturday_boardings",
-    "bus_avg_sunday_boardings"
-   ],
-   "groupBy": [
-    "route__route_name"
-   ],
-   "where": [],
-   "orderBy": [
-    {
-     "key": "bus_avg_weekday_boardings",
-     "desc": true
-    }
-   ],
-   "meta": {
-    "chart": "table",
-    "range": "28d"
-   }
-  },
-  {
-   "name": "station_weekday_ranking",
-   "label": "Station ranking, weekday entries",
-   "description": "Average weekday, Saturday and Sunday/holiday entries per station, busiest first.",
-   "metrics": [
-    "rail_avg_weekday_entries",
-    "rail_avg_saturday_entries",
-    "rail_avg_sunday_entries"
-   ],
-   "groupBy": [
-    "station__station_name"
-   ],
-   "where": [],
-   "orderBy": [
-    {
-     "key": "rail_avg_weekday_entries",
-     "desc": true
-    }
-   ],
-   "meta": {
-    "chart": "table",
-    "range": "28d"
-   }
-  },
-  {
-   "name": "day_type_mix_monthly",
-   "label": "Rides by day type, monthly",
-   "description": "Total rides (rail + bus) split by CTA day type, by month.",
-   "metrics": [
-    "total_rides"
+    "line_avg_weekday_allocated"
    ],
    "groupBy": [
     "metric_time__month",
-    "service_day__day_type"
+    "line__line_name"
    ],
    "where": [],
    "orderBy": [],
    "meta": {
-    "chart": "stacked",
-    "range": "3y"
+    "chart": "line",
+    "range": "all"
    }
   }
  ]

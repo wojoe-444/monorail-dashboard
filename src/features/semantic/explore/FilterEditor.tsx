@@ -163,11 +163,25 @@ function FilterRow({
 }
 
 function ValuePicker({ dimension, label, values, onChange }: { dimension: string; label: string; values: string[]; onChange: (v: string[]) => void }) {
-  const { engine } = useDataset()
+  const { engine, stationById, routeById, lineById } = useDataset()
+  // Entities filter on ids; show the names people know.
+  const nameOf = (v: string) =>
+    dimension === 'station'
+      ? (stationById.get(v)?.name ?? v)
+      : dimension === 'route'
+        ? routeById.has(v)
+          ? `${v} ${routeById.get(v)!.name}`
+          : v
+        : dimension === 'line'
+          ? (lineById.get(v)?.name ?? v)
+          : formatCategory(v)
   const [q, setQ] = useState('')
   const all = engine.dimensionValues(dimension)
-  const shown = all.filter((v) => formatCategory(v).toLowerCase().includes(q.trim().toLowerCase())).slice(0, 200)
-  const summary = values.length === 0 ? 'Any' : values.length === 1 ? formatCategory(values[0]) : `${values.length} values`
+  const shown = all
+    .filter((v) => nameOf(v).toLowerCase().includes(q.trim().toLowerCase()))
+    .sort((a, b) => nameOf(a).localeCompare(nameOf(b), undefined, { numeric: true }))
+    .slice(0, 200)
+  const summary = values.length === 0 ? 'Any' : values.length === 1 ? nameOf(values[0]) : `${values.length} values`
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -182,7 +196,7 @@ function ValuePicker({ dimension, label, values, onChange }: { dimension: string
           {shown.map((v) => (
             <label key={v} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent">
               <Checkbox checked={values.includes(v)} onCheckedChange={(c) => onChange(c ? [...values, v] : values.filter((x) => x !== v))} />
-              <span className="truncate">{formatCategory(v)}</span>
+              <span className="truncate">{nameOf(v)}</span>
             </label>
           ))}
           {all.length > shown.length && <p className="px-2 py-1 text-xs text-muted-foreground">Showing {shown.length} of {all.length}; search to narrow.</p>}

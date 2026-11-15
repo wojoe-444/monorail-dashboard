@@ -261,7 +261,11 @@ export function ExplorePage() {
                       Download CSV
                     </Button>
                   </div>
-                  <ResultTable result={result} caption={title} signed={result.columns.filter((c) => /_yoy$/.test(c.key)).map((c) => c.key)} />
+                  {spec.chart === 'table' ? (
+                    <p className="px-2 text-sm text-muted-foreground">The table is shown above.</p>
+                  ) : (
+                    <ResultTable result={result} caption={title} signed={result.columns.filter((c) => /_yoy$/.test(c.key)).map((c) => c.key)} />
+                  )}
                 </TabsContent>
                 <TabsContent value="mf" className="flex flex-col gap-2 px-4">
                   <p className="text-sm text-muted-foreground">The same question against the DuckDB warehouse, from the semantic/ folder:</p>

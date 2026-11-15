@@ -28,21 +28,22 @@ export function buildTables(encoded: Record<SnapshotTable, EncodedTable>): Recor
   return tables
 }
 
-/** One row per station x line x day: full station entries, and entries split evenly across the station's lines. */
+/** One row per station x line x day: full station entries, and entries allocated by the bridge's weight. */
 function deriveLineEntries(fact: Table, bridge: Table): Table {
   const fStation = fact.columns.station_id as CatColumn
   const fDate = fact.columns.ride_date as { kind: 'date'; data: Int32Array }
   const fRides = fact.columns.rides as NumColumn
   const bStation = bridge.columns.station_id as CatColumn
   const bLine = bridge.columns.line_id as CatColumn
-  const bCount = bridge.columns.line_count as NumColumn
+  const bWeight = bridge.columns.allocation_weight as NumColumn
 
   // Fact rows are sorted by station, so each station is one contiguous range.
   const ranges = new Map<string, [number, number]>()
   for (let r = 0; r < fact.rowCount; r++) {
     const s = fStation.dict[fStation.codes[r]]
     const range = ranges.get(s)
-    if (range) range[1] = r + 1
+    if (range && range[1] === r) range[1] = r + 1
+    else if (range) throw new Error(`fct_rail_station_entries must be sorted by station (station ${s} is not contiguous)`)
     else ranges.set(s, [r, r + 1])
   }
 
@@ -63,14 +64,14 @@ function deriveLineEntries(fact: Table, bridge: Table): Table {
     const s = bStation.dict[bStation.codes[b]]
     const range = ranges.get(s)
     if (!range) continue
-    const n = bCount.data[b]
+    const w = bWeight.data[b]
     const code = stationCode.get(s)!
     for (let r = range[0]; r < range[1]; r++, at++) {
       station[at] = code
       line[at] = bLine.codes[b]
       date[at] = fDate.data[r]
       stationRides[at] = fRides.data[r]
-      allocated[at] = fRides.data[r] / n
+      allocated[at] = fRides.data[r] * w
     }
   }
   return {

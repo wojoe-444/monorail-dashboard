@@ -17,6 +17,11 @@
  * metrics with an offset window. This engine also allows them over a time range
  * with no metric_time (the offset shifts the range), which is what "this station,
  * last 4 weeks vs the same 4 weeks a year earlier" needs.
+ *
+ * And one deliberate difference: an offset value is null (not a fraction) for a
+ * period whose shifted window starts before the data does. MetricFlow compares
+ * December 2019 with the one day of December 2018-January 2019 that exists and
+ * reports +6,456%; this engine reports no comparison.
  */
 import { evalExpr, identifiers, parseExpr, type ExprNode } from './expr.ts'
 import { parseFilter, type FilterCondition } from './filters.ts'
@@ -378,7 +383,11 @@ export class SemanticEngine {
     }
 
     const out: Values = new Map()
+    const timeIndex = run.refs.findIndex((r) => r.kind === 'time')
+    // An offset that reaches back before the data would compare against a fragment of a period.
+    const truncated = offset > 0 && timeIndex < 0 && run.start - offset < this.minDay
     for (const [key, g] of groups) {
+      if (truncated) break
       const parts: CellValue[] = []
       let rest = key
       for (let i = 0; i < accessors.length; i++) {
@@ -386,6 +395,7 @@ export class SemanticEngine {
         rest -= code * radix[i]
         parts.push(accessors[i].decode(code))
       }
+      if (offset > 0 && timeIndex >= 0 && (parts[timeIndex] as number) - offset < this.minDay) continue
       const v =
         measure.agg === 'count_distinct' ? g.set!.size : measure.agg === 'count' ? g.n : measure.agg === 'average' ? g.sum / g.n : g.sum
       out.set(parts.length ? JSON.stringify(parts) : '', v)

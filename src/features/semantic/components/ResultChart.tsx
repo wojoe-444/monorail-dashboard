@@ -2,6 +2,7 @@ import { PeriodBarChart } from '@/components/charts/PeriodBarChart'
 import { RankedBars } from '@/components/charts/RankedBars'
 import { TimeSeriesChart } from '@/components/charts/TimeSeriesChart'
 
+import { dayOfIso, isoOfDay, periodEnd } from '../core/time.ts'
 import type { QueryResult } from '../core/types.ts'
 import { useDataset } from '../data'
 import { formatCategory, formatCompact, formatPeriod, formatValue } from '../format'
@@ -19,7 +20,7 @@ interface ResultChartProps {
 
 /** Draw any semantic-layer result: lines or bars over time, ranked bars without time, or a table. */
 export function ResultChart({ result, chart, smooth, height = 300, title }: ResultChartProps) {
-  const { lineByName } = useDataset()
+  const { lineByName, maxDay } = useDataset()
   if (chart === 'table') return <ResultTable result={result} caption={title} signed={result.columns.filter((c) => c.format === 'percent' && /yoy/.test(c.key)).map((c) => c.key)} />
   if (!result.rows.length) return <Empty />
 
@@ -33,6 +34,15 @@ export function ResultChart({ result, chart, smooth, height = 300, title }: Resu
     pivot.hiddenSeries ? `Showing the ${pivot.series.length} largest series; ${pivot.hiddenSeries} more in the table view.` : null,
     smooth && pivot.grain === 'day' ? `${smooth}-day trailing average.` : null,
   ].filter(Boolean)
+  // The data ends mid-period (on a Monday, mid-month): a final partial week or month of sums would
+  // read as a collapse. Keep it out of the chart; the table still has it.
+  if (pivot.grain && pivot.grain !== 'day' && pivot.data.length > 1) {
+    const lastStart = String(pivot.data[pivot.data.length - 1].t)
+    if (periodEnd(dayOfIso(lastStart), pivot.grain) > maxDay) {
+      pivot.data = pivot.data.slice(0, -1)
+      notes.push(`The latest ${pivot.grain} is incomplete (data ends ${formatPeriod(isoOfDay(maxDay))}); it is in the table view.`)
+    }
+  }
   // Averages, ratios and shares do not add up, so they never stack (a stacked share would show a 123% "total").
   const stackable = result.columns.filter((c) => pivot.series.some((p) => p.metric === c.key)).every((c) => c.additive)
   const kind = chart === 'stacked' && !stackable ? 'bar' : chart

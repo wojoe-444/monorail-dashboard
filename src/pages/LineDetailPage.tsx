@@ -104,7 +104,7 @@ function LineDetail({ lineId }: { lineId: string }) {
       <PageHeader
         eyebrow="'L' line"
         title={`${line.name} Line`}
-        description={`${stations.length} stations · ${adaCount} ADA accessible · entries at transfer stations split evenly across their lines.`}
+        description={`${stations.length} stations · ${adaCount} ADA accessible · entries at transfer stations split across their all-day lines.`}
       />
       <div className="flex flex-wrap items-center gap-3">
         <span className="flex items-center gap-2 rounded-full border px-3 py-1 text-sm">

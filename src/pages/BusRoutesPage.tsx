@@ -18,7 +18,7 @@ import type { QueryResult } from '@/features/semantic/core/types.ts'
 import { downloadCsv } from '@/features/semantic/csv'
 import { useDataset, type Route } from '@/features/semantic/data'
 import { formatCompact, formatPercent, formatValue } from '@/features/semantic/format'
-import { baseline2019, countDayType, recentWeeks } from '@/features/semantic/ranges'
+import { baseline2019, countDayType, recentWeeks, weekStarts } from '@/features/semantic/ranges'
 import { useQueryOrThrow } from '@/features/semantic/useQuery'
 import { useRangeParam } from '@/features/semantic/useRangeParam'
 import type { ViewSpec } from '@/features/semantic/views'
@@ -65,10 +65,13 @@ export function BusRoutesPage() {
 
   const by = new Map(current.rows.map((r) => [String(r.route), r]))
   const by2019 = new Map(before.rows.map((r) => [String(r.route), num(r.bus_avg_weekday_boardings)]))
+  // One slot per week, so a missing week stays a gap at its own position instead of shifting the line.
+  const weeks = weekStarts(recentWeeks(ds.maxDay))
   const trendBy = new Map<string, number[]>()
   for (const r of weekly.rows) {
-    const arr = trendBy.get(String(r.route)) ?? []
-    arr.push(num(r.bus_boardings) ?? 0)
+    const arr = trendBy.get(String(r.route)) ?? weeks.map(() => 0)
+    const i = weeks.indexOf(String(r.metric_time__week))
+    if (i >= 0) arr[i] = num(r.bus_boardings) ?? 0
     trendBy.set(String(r.route), arr)
   }
   const total = current.rows.reduce((a, r) => a + (num(r.bus_boardings) ?? 0), 0)
