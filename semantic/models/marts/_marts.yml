@@ -1,0 +1,111 @@
+version: 2
+
+models:
+  - name: metricflow_time_spine
+    description: Daily time spine for MetricFlow.
+    time_spine:
+      standard_granularity_column: date_day
+    columns:
+      - name: date_day
+        granularity: day
+
+  - name: dim_stations
+    description: One row per 'L' station (the ridership grain), with lines, accessibility, coordinates and an approximate sector.
+    columns:
+      - name: station_id
+        description: CTA parent station id (map_id in the stops list).
+        data_tests: [unique, not_null]
+      - name: station_name
+        description: Station name as the ridership feed last published it.
+        data_tests: [not_null]
+      - name: ada_accessible
+        description: True when every platform at the station is flagged ADA accessible in the stops list.
+      - name: sector
+        description: Approximate sector from the bearing to State & Madison; "Loop" inside the elevated Loop. Not an official district.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [Loop, North, Northwest, West, Southwest, South, Unknown]
+      - name: lines
+        description: Lines that stop at the station, comma separated, in CTA order.
+      - name: line_count
+        description: Number of lines that stop at the station.
+
+  - name: dim_lines
+    description: The eight 'L' routes.
+    columns:
+      - name: line_id
+        data_tests: [unique, not_null]
+
+  - name: bridge_station_lines
+    description: One row per station per line serving it.
+    columns:
+      - name: station_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_stations')
+                field: station_id
+      - name: line_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_lines')
+                field: line_id
+
+  - name: dim_bus_routes
+    description: One row per bus route in the ridership feed.
+    columns:
+      - name: route_id
+        data_tests: [unique, not_null]
+      - name: route_type
+        description: Express (X routes), Shuttle (1000-series rail-replacement buses) or Local.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [Local, Express, Shuttle]
+
+  - name: dim_service_days
+    description: One row per calendar day in the ridership window, with the CTA day type.
+    columns:
+      - name: ride_date
+        data_tests: [unique, not_null]
+      - name: day_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [Weekday, Saturday, Sunday/Holiday, Unknown]
+
+  - name: fct_rail_station_entries
+    description: "'L' station entries: one row per station per service day."
+    columns:
+      - name: station_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_stations')
+                field: station_id
+      - name: rides
+        description: Turnstile entries. In-system transfers between lines are not counted.
+        data_tests: [not_null]
+
+  - name: fct_rail_line_entries
+    description: "'L' station entries by line: one row per station per line per service day."
+
+  - name: fct_bus_route_rides
+    description: "Bus boardings: one row per route per service day."
+    columns:
+      - name: route_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_bus_routes')
+                field: route_id
+      - name: rides
+        description: Boardings. A trip with a bus-to-bus transfer counts once per bus.
+        data_tests: [not_null]
+
+  - name: dq_source_checks
+    description: Counts of data-quality findings in the source feeds.

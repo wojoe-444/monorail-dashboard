@@ -1,0 +1,76 @@
+# Team views: MetricFlow saved queries. They show in the dashboard's Explore page as shared,
+# reviewed views (anyone can open one and save a personal copy). Run one with:
+#   mf query --saved-query weekday_by_line_monthly --start-time 2025-01-01
+# config.meta.chart: line | bar | table; config.meta.range: a range preset (90d, 1y, 3y, all, ...).
+saved_queries:
+  - name: system_daily_ridership
+    label: System ridership, daily
+    description: Rail entries and bus boardings per day.
+    query_params:
+      metrics: [rail_entries, bus_boardings]
+      group_by: ["TimeDimension('metric_time', 'day')"]
+    config:
+      meta: { chart: line, range: 1y }
+
+  - name: weekday_by_line_monthly
+    label: Weekday entries by line, monthly
+    description: Average weekday entries per line (allocated at transfer stations), by month.
+    query_params:
+      metrics: [line_avg_weekday_allocated]
+      group_by: ["TimeDimension('metric_time', 'month')", "Dimension('line__line_name')"]
+    config:
+      meta: { chart: line, range: all }
+
+  - name: station_weekday_ranking
+    label: Station ranking, weekday entries
+    description: Average weekday entries per station and the change vs 52 weeks earlier.
+    query_params:
+      metrics: [rail_avg_weekday_entries, rail_avg_weekday_yoy]
+      group_by: ["Dimension('station__station_name')"]
+    config:
+      meta: { chart: table, range: 28d }
+
+  - name: sector_weekday_trend
+    label: Weekday entries by sector, monthly
+    description: Average weekday rail entries per sector, by month. Shows where downtown recovery lags the neighborhoods.
+    query_params:
+      metrics: [rail_avg_weekday_entries]
+      group_by: ["TimeDimension('metric_time', 'month')", "Dimension('station__sector')"]
+    config:
+      meta: { chart: line, range: all }
+
+  - name: day_type_mix_monthly
+    label: Rides by day type, monthly
+    description: Total rides (rail + bus) split by CTA day type, by month.
+    query_params:
+      metrics: [total_rides]
+      group_by: ["TimeDimension('metric_time', 'month')", "Dimension('service_day__day_type')"]
+    config:
+      meta: { chart: bar, range: 3y }
+
+  - name: bus_route_ranking
+    label: Bus route ranking, weekday boardings
+    description: Average weekday boardings per route and the change vs 52 weeks earlier.
+    query_params:
+      metrics: [bus_avg_weekday_boardings, bus_avg_weekday_yoy]
+      group_by: ["Dimension('route__route_name')"]
+    config:
+      meta: { chart: table, range: 28d }
+
+  - name: rail_share_monthly
+    label: Rail share of rides, monthly
+    description: Rail entries as a share of all rides, by month.
+    query_params:
+      metrics: [rail_share]
+      group_by: ["TimeDimension('metric_time', 'month')"]
+    config:
+      meta: { chart: line, range: all }
+
+  - name: accessible_station_weekday
+    label: Weekday entries at accessible vs other stations
+    description: Average weekday entries at ADA-accessible stations vs the rest, by month.
+    query_params:
+      metrics: [rail_avg_weekday_entries]
+      group_by: ["TimeDimension('metric_time', 'month')", "Dimension('station__ada_accessible')"]
+    config:
+      meta: { chart: line, range: all }

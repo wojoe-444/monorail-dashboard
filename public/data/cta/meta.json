@@ -1,0 +1,56 @@
+{
+  "builtAt": "2026-11-15T22:35:50.473Z",
+  "fetchedAt": "2026-11-15T22:12:43.506Z",
+  "sources": [
+    {
+      "file": "rail_station_entries.csv",
+      "id": "5neh-572f",
+      "rowCount": 401223,
+      "name": "CTA - Ridership - 'L' Station Entries - Daily Totals",
+      "attribution": "Chicago Transit Authority",
+      "license": "See Terms of Use",
+      "rowsUpdatedAt": "2026-10-28T16:52:14.000Z",
+      "url": "https://data.cityofchicago.org/d/5neh-572f"
+    },
+    {
+      "file": "bus_route_rides.csv",
+      "id": "jyb9-n7fm",
+      "rowCount": 320625,
+      "name": "CTA - Ridership - Bus Routes - Daily Totals by Route",
+      "attribution": "Chicago Transit Authority",
+      "license": "See Terms of Use",
+      "rowsUpdatedAt": "2026-10-28T16:50:20.000Z",
+      "url": "https://data.cityofchicago.org/d/jyb9-n7fm"
+    },
+    {
+      "file": "l_stops.csv",
+      "id": "8pix-ypme",
+      "rowCount": 302,
+      "name": "CTA - System Information - List of 'L' Stops",
+      "attribution": "Chicago Transit Authority",
+      "license": "City of Chicago Data Portal terms of use",
+      "rowsUpdatedAt": "2025-11-19T18:14:37.000Z",
+      "url": "https://data.cityofchicago.org/d/8pix-ypme"
+    },
+    {
+      "file": "bus_routes.csv",
+      "id": "6uva-a5ei",
+      "rowCount": 127,
+      "name": "CTA - Bus Routes",
+      "attribution": "City of Chicago",
+      "license": "See Terms of Use",
+      "rowsUpdatedAt": "2025-01-08T17:26:16.000Z",
+      "url": "https://data.cityofchicago.org/d/6uva-a5ei"
+    }
+  ],
+  "rowCounts": {
+    "dim_stations": 145,
+    "dim_lines": 8,
+    "bridge_station_lines": 191,
+    "dim_bus_routes": 133,
+    "dim_service_days": 2800,
+    "fct_rail_station_entries": 401223,
+    "fct_bus_route_rides": 320625,
+    "dq_source_checks": 7
+  }
+}

@@ -1,0 +1,500 @@
+# MetricFlow metrics. Labels and descriptions show in the dashboard's metric catalog.
+# config.meta.category groups the catalog; config.meta.format is number | percent.
+# "52 weeks earlier" metrics offset by 364 days so weekdays line up.
+# Offsets go on simple metrics only: MetricFlow offsets ratio/derived inputs after aggregating at the
+# query grain, so a 364-day offset at month grain never joins. scripts/build-data.mjs enforces this.
+metrics:
+  # ---- Rail --------------------------------------------------------
+  - name: rail_entries
+    label: "Rail entries"
+    description: "Turnstile entries at 'L' stations. Transfers between lines inside the paid area are not counted."
+    type: simple
+    type_params:
+      measure: rail_entries
+    config:
+      meta:
+        category: Rail
+        format: number
+
+  - name: rail_service_days
+    label: "Rail service days"
+    description: "Distinct service days with reported station entries."
+    type: simple
+    type_params:
+      measure: rail_service_days
+    config:
+      meta:
+        category: Rail
+        format: number
+
+  - name: rail_stations_reporting
+    label: "Stations reporting"
+    description: "Distinct stations with a reported count (zero counts as reported)."
+    type: simple
+    type_params:
+      measure: rail_stations_reporting
+    config:
+      meta:
+        category: Rail
+        format: number
+
+  - name: rail_avg_daily_entries
+    label: "Avg daily rail entries"
+    description: "Rail entries per service day for the group."
+    type: ratio
+    type_params:
+      numerator: rail_entries
+      denominator: rail_service_days
+    config:
+      meta:
+        category: Rail
+        format: number
+
+  - name: rail_avg_weekday_entries
+    label: "Avg weekday rail entries"
+    description: "Rail entries per weekday (CTA weekday schedule; holidays excluded)."
+    type: ratio
+    type_params:
+      numerator: rail_entries
+      denominator: rail_service_days
+    filter: "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+    config:
+      meta:
+        category: Rail
+        format: number
+
+  - name: rail_avg_saturday_entries
+    label: "Avg Saturday rail entries"
+    description: "Rail entries per Saturday."
+    type: ratio
+    type_params:
+      numerator: rail_entries
+      denominator: rail_service_days
+    filter: "{{ Dimension('service_day__day_type') }} = 'Saturday'"
+    config:
+      meta:
+        category: Rail
+        format: number
+
+  - name: rail_avg_sunday_entries
+    label: "Avg Sunday/holiday rail entries"
+    description: "Rail entries per Sunday or holiday."
+    type: ratio
+    type_params:
+      numerator: rail_entries
+      denominator: rail_service_days
+    filter: "{{ Dimension('service_day__day_type') }} = 'Sunday/Holiday'"
+    config:
+      meta:
+        category: Rail
+        format: number
+
+  - name: rail_entries_ly
+    label: "Rail entries, 52 weeks earlier"
+    description: "Rail entries for the same period 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday)."
+    type: derived
+    type_params:
+      expr: rail_entries_ly
+      metrics:
+        - name: rail_entries
+          offset_window: 364 days
+          alias: rail_entries_ly
+    config:
+      meta:
+        category: Rail
+        format: number
+
+  - name: rail_entries_yoy
+    label: "Rail entries vs 52 weeks earlier"
+    description: "Change in rail entries vs the same period 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday)."
+    type: derived
+    type_params:
+      expr: (rail_entries - rail_entries_ly) / nullif(rail_entries_ly, 0)
+      metrics:
+        - name: rail_entries
+        - name: rail_entries
+          offset_window: 364 days
+          alias: rail_entries_ly
+    config:
+      meta:
+        category: Rail
+        format: percent
+
+  - name: rail_avg_weekday_entries_ly
+    label: "Avg weekday rail entries, 52 weeks earlier"
+    description: "Average weekday rail entries for the same period 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday)."
+    type: derived
+    type_params:
+      expr: wk_num_ly / nullif(wk_den_ly, 0)
+      metrics:
+        - name: rail_entries
+          filter: "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+          offset_window: 364 days
+          alias: wk_num_ly
+        - name: rail_service_days
+          filter: "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+          offset_window: 364 days
+          alias: wk_den_ly
+    config:
+      meta:
+        category: Rail
+        format: number
+
+  - name: rail_avg_weekday_yoy
+    label: "Avg weekday rail entries vs 52 weeks earlier"
+    description: "Change in average weekday rail entries vs 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday)."
+    type: derived
+    type_params:
+      expr: (rail_avg_weekday_entries - wk_num_ly / nullif(wk_den_ly, 0)) / nullif(wk_num_ly / nullif(wk_den_ly, 0), 0)
+      metrics:
+        - name: rail_avg_weekday_entries
+        - name: rail_entries
+          filter: "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+          offset_window: 364 days
+          alias: wk_num_ly
+        - name: rail_service_days
+          filter: "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+          offset_window: 364 days
+          alias: wk_den_ly
+    config:
+      meta:
+        category: Rail
+        format: percent
+
+  # ---- Bus ---------------------------------------------------------
+  - name: bus_boardings
+    label: "Bus boardings"
+    description: "Boardings on CTA buses. A trip with a bus-to-bus transfer counts once per bus."
+    type: simple
+    type_params:
+      measure: bus_boardings
+    config:
+      meta:
+        category: Bus
+        format: number
+
+  - name: bus_service_days
+    label: "Bus service days"
+    description: "Distinct service days with reported boardings."
+    type: simple
+    type_params:
+      measure: bus_service_days
+    config:
+      meta:
+        category: Bus
+        format: number
+
+  - name: bus_routes_reporting
+    label: "Routes reporting"
+    description: "Distinct routes with a reported count."
+    type: simple
+    type_params:
+      measure: bus_routes_reporting
+    config:
+      meta:
+        category: Bus
+        format: number
+
+  - name: bus_avg_daily_boardings
+    label: "Avg daily bus boardings"
+    description: "Bus boardings per service day for the group."
+    type: ratio
+    type_params:
+      numerator: bus_boardings
+      denominator: bus_service_days
+    config:
+      meta:
+        category: Bus
+        format: number
+
+  - name: bus_avg_weekday_boardings
+    label: "Avg weekday bus boardings"
+    description: "Bus boardings per weekday (holidays excluded)."
+    type: ratio
+    type_params:
+      numerator: bus_boardings
+      denominator: bus_service_days
+    filter: "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+    config:
+      meta:
+        category: Bus
+        format: number
+
+  - name: bus_avg_saturday_boardings
+    label: "Avg Saturday bus boardings"
+    description: "Bus boardings per Saturday."
+    type: ratio
+    type_params:
+      numerator: bus_boardings
+      denominator: bus_service_days
+    filter: "{{ Dimension('service_day__day_type') }} = 'Saturday'"
+    config:
+      meta:
+        category: Bus
+        format: number
+
+  - name: bus_avg_sunday_boardings
+    label: "Avg Sunday/holiday bus boardings"
+    description: "Bus boardings per Sunday or holiday."
+    type: ratio
+    type_params:
+      numerator: bus_boardings
+      denominator: bus_service_days
+    filter: "{{ Dimension('service_day__day_type') }} = 'Sunday/Holiday'"
+    config:
+      meta:
+        category: Bus
+        format: number
+
+  - name: bus_boardings_ly
+    label: "Bus boardings, 52 weeks earlier"
+    description: "Bus boardings for the same period 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday)."
+    type: derived
+    type_params:
+      expr: bus_boardings_ly
+      metrics:
+        - name: bus_boardings
+          offset_window: 364 days
+          alias: bus_boardings_ly
+    config:
+      meta:
+        category: Bus
+        format: number
+
+  - name: bus_boardings_yoy
+    label: "Bus boardings vs 52 weeks earlier"
+    description: "Change in bus boardings vs the same period 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday)."
+    type: derived
+    type_params:
+      expr: (bus_boardings - bus_boardings_ly) / nullif(bus_boardings_ly, 0)
+      metrics:
+        - name: bus_boardings
+        - name: bus_boardings
+          offset_window: 364 days
+          alias: bus_boardings_ly
+    config:
+      meta:
+        category: Bus
+        format: percent
+
+  - name: bus_avg_weekday_boardings_ly
+    label: "Avg weekday bus boardings, 52 weeks earlier"
+    description: "Average weekday bus boardings 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday)."
+    type: derived
+    type_params:
+      expr: wk_num_ly / nullif(wk_den_ly, 0)
+      metrics:
+        - name: bus_boardings
+          filter: "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+          offset_window: 364 days
+          alias: wk_num_ly
+        - name: bus_service_days
+          filter: "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+          offset_window: 364 days
+          alias: wk_den_ly
+    config:
+      meta:
+        category: Bus
+        format: number
+
+  - name: bus_avg_weekday_yoy
+    label: "Avg weekday bus boardings vs 52 weeks earlier"
+    description: "Change in average weekday bus boardings vs 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday)."
+    type: derived
+    type_params:
+      expr: (bus_avg_weekday_boardings - wk_num_ly / nullif(wk_den_ly, 0)) / nullif(wk_num_ly / nullif(wk_den_ly, 0), 0)
+      metrics:
+        - name: bus_avg_weekday_boardings
+        - name: bus_boardings
+          filter: "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+          offset_window: 364 days
+          alias: wk_num_ly
+        - name: bus_service_days
+          filter: "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+          offset_window: 364 days
+          alias: wk_den_ly
+    config:
+      meta:
+        category: Bus
+        format: percent
+
+  # ---- System ------------------------------------------------------
+  - name: total_rides
+    label: "Total rides (rail + bus)"
+    description: "Rail entries plus bus boardings. Mixes two counting methods (entries vs boardings), as the CTA does in its own totals."
+    type: derived
+    type_params:
+      expr: rail_entries + bus_boardings
+      metrics:
+        - name: rail_entries
+        - name: bus_boardings
+    config:
+      meta:
+        category: System
+        format: number
+
+  - name: total_rides_ly
+    label: "Total rides, 52 weeks earlier"
+    description: "Rail entries plus bus boardings 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday)."
+    type: derived
+    type_params:
+      expr: rail_ly + bus_ly
+      metrics:
+        - name: rail_entries
+          offset_window: 364 days
+          alias: rail_ly
+        - name: bus_boardings
+          offset_window: 364 days
+          alias: bus_ly
+    config:
+      meta:
+        category: System
+        format: number
+
+  - name: total_rides_yoy
+    label: "Total rides vs 52 weeks earlier"
+    description: "Change in total rides vs 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday)."
+    type: derived
+    type_params:
+      expr: (rail_entries + bus_boardings - rail_ly - bus_ly) / nullif(rail_ly + bus_ly, 0)
+      metrics:
+        - name: rail_entries
+        - name: bus_boardings
+        - name: rail_entries
+          offset_window: 364 days
+          alias: rail_ly
+        - name: bus_boardings
+          offset_window: 364 days
+          alias: bus_ly
+    config:
+      meta:
+        category: System
+        format: percent
+
+  - name: rail_share
+    label: "Rail share of rides"
+    description: "Rail entries as a share of rail entries plus bus boardings."
+    type: derived
+    type_params:
+      expr: rail_entries / nullif(rail_entries + bus_boardings, 0)
+      metrics:
+        - name: rail_entries
+        - name: bus_boardings
+    config:
+      meta:
+        category: System
+        format: percent
+
+  - name: total_avg_weekday_rides
+    label: "Avg weekday rides (rail + bus)"
+    description: "Average weekday rail entries plus average weekday bus boardings."
+    type: derived
+    type_params:
+      expr: rail_avg_weekday_entries + bus_avg_weekday_boardings
+      metrics:
+        - name: rail_avg_weekday_entries
+        - name: bus_avg_weekday_boardings
+    config:
+      meta:
+        category: System
+        format: number
+
+  # ---- Line --------------------------------------------------------
+  - name: line_entries_allocated
+    label: "Line entries (allocated)"
+    description: "Station entries split evenly across the lines serving each station. Lines sum to the system total."
+    type: simple
+    type_params:
+      measure: line_entries_allocated
+    config:
+      meta:
+        category: Line
+        format: number
+
+  - name: line_station_entries
+    label: "Entries at line stations"
+    description: "Full entries at every station on the line; a transfer station counts toward each of its lines. Shows a line's reach. Never sum across lines."
+    type: simple
+    type_params:
+      measure: line_station_entries
+    config:
+      meta:
+        category: Line
+        format: number
+
+  - name: line_service_days
+    label: "Line service days"
+    description: "Distinct service days with entries on the line."
+    type: simple
+    type_params:
+      measure: line_service_days
+    config:
+      meta:
+        category: Line
+        format: number
+
+  - name: line_avg_daily_allocated
+    label: "Avg daily line entries (allocated)"
+    description: "Allocated line entries per service day."
+    type: ratio
+    type_params:
+      numerator: line_entries_allocated
+      denominator: line_service_days
+    config:
+      meta:
+        category: Line
+        format: number
+
+  - name: line_avg_weekday_allocated
+    label: "Avg weekday line entries (allocated)"
+    description: "Allocated line entries per weekday."
+    type: ratio
+    type_params:
+      numerator: line_entries_allocated
+      denominator: line_service_days
+    filter: "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+    config:
+      meta:
+        category: Line
+        format: number
+
+  - name: line_avg_weekday_allocated_ly
+    label: "Avg weekday line entries, 52 weeks earlier"
+    description: "Allocated line entries per weekday, 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday)."
+    type: derived
+    type_params:
+      expr: wk_num_ly / nullif(wk_den_ly, 0)
+      metrics:
+        - name: line_entries_allocated
+          filter: "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+          offset_window: 364 days
+          alias: wk_num_ly
+        - name: line_service_days
+          filter: "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+          offset_window: 364 days
+          alias: wk_den_ly
+    config:
+      meta:
+        category: Line
+        format: number
+
+  - name: line_avg_weekday_yoy
+    label: "Avg weekday line entries vs 52 weeks earlier"
+    description: "Change in allocated line entries per weekday vs 52 weeks earlier. Compared with 364 days earlier, so weekdays line up (Monday vs Monday)."
+    type: derived
+    type_params:
+      expr: (line_avg_weekday_allocated - wk_num_ly / nullif(wk_den_ly, 0)) / nullif(wk_num_ly / nullif(wk_den_ly, 0), 0)
+      metrics:
+        - name: line_avg_weekday_allocated
+        - name: line_entries_allocated
+          filter: "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+          offset_window: 364 days
+          alias: wk_num_ly
+        - name: line_service_days
+          filter: "{{ Dimension('service_day__day_type') }} = 'Weekday'"
+          offset_window: 364 days
+          alias: wk_den_ly
+    config:
+      meta:
+        category: Line
+        format: percent

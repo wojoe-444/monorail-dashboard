@@ -1,0 +1,9 @@
+version: 2
+seeds:
+  - name: lines
+    description: >
+      The eight 'L' routes. color_hex is the CTA's official route color (wayfinding data,
+      not app styling); the dashboard reads it from the snapshot to draw line identity.
+    columns:
+      - name: line_id
+        data_tests: [unique, not_null]
