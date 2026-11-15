@@ -109,6 +109,16 @@ Need a component the kit doesn't have (tabs for switching between panels of cont
 - Don't call `localStorage` directly. Use `prefs`, which handles blocked storage and prefixes keys per app.
 - Don't change the drawer, top bar or theme system to build a feature. If the app truly needs a different shell, change `AppShell` once, deliberately.
 
+## This app: CTA ridership on a semantic layer
+
+- **Numbers come from the semantic layer.** Pages ask questions with `useQuery` / `useQueryOrThrow` (`src/features/semantic/useQuery.ts`) in MetricFlow terms: `{ metrics, groupBy: ['metric_time__week', 'station__sector'], where, timeRange }`. Don't aggregate fact tables by hand in a page. If a page needs a number no metric gives, add the metric to `semantic/models/semantic/metrics.yml` and run `npm run data:build`. The exception is `src/features/transit/exceptions.ts`, which needs a per-day baseline per entity.
+- **Data pages are wrapped in `withData`** in `routes.tsx`. Inside them, `useDataset()` gives the engine plus typed stations, lines, routes and day types.
+- **Charts sit in `ChartCard`** (`src/features/semantic/components/ChartCard.tsx`). Pass `view` (a `ViewSpec`) and `result`, and the card gets a table view, CSV, Open in Explore, Pin to board and Copy as mf query.
+- **Page state goes in the URL** via `useRangeParam` / `useUrlParams`. Date ranges are presets relative to the last day with data (`src/features/semantic/ranges.ts`).
+- **Line colors** (Red Line red, and so on) are the one exception to "tokens only". They are official CTA wayfinding colors, stored as data in the dbt seed `semantic/seeds/lines.csv` and drawn only through `LineSwatch` / `LineChip` or as a line's chart series color. Text never takes a line color.
+- **After editing `semantic/`**, run `npm run data:build` and `npm run semantic:parity`. Add a parity query when you add a new kind of metric.
+- **Engine files in `src/features/semantic/core`** use relative imports with `.ts` extensions and erasable TypeScript only, so Node runs them directly in `scripts/parity.mjs`.
+
 ## Starting a new app from this template
 
 1. Set `name`, `tagline` and `storagePrefix` in `src/app/config.ts`, `"name"` in `package.json` (then `npm install` to sync the lockfile), and `<title>` in `index.html`.
