@@ -132,6 +132,7 @@ Most apps are one dashboard, and that stays the default: with one entry in `src/
 - **Page state goes in the URL** via `useRangeParam` / `useUrlParams`. Date ranges are presets relative to the last day with data (`src/features/semantic/ranges.ts`).
 - **Line colors** (Red Line red, and so on) are the one exception to "tokens only". They are official CTA wayfinding colors, stored as data in the dbt seed `semantic/seeds/lines.csv` and drawn only through `LineSwatch` / `LineChip` or as a line's chart series color. Text never takes a line color.
 - **After editing `semantic/`**, run `npm run data:build` and `npm run semantic:parity`. Add a parity query when you add a new kind of metric.
+- **Larger data:** keep pages on `useQuery(spec)` so the data source can move to a server without page changes. See `docs/scaling-data.md`.
 - **Engine files in `src/features/semantic/core`** use relative imports with `.ts` extensions and erasable TypeScript only, so Node runs them directly in `scripts/parity.mjs`.
 
 ## Starting a new app from this template

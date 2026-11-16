@@ -30,6 +30,10 @@ The app is a small hub (`#/`) with three dashboards:
 
 The hub is optional. With one dashboard registered in `src/app/dashboards.ts`, the app is a plain single dashboard. See [docs/multiple-dashboards.md](./docs/multiple-dashboards.md) for when to use a hub, when to build separate apps instead, and the conventions.
 
+### Larger data
+
+The CTA data fits in the browser (about 1.4 MB gzipped). For sources in the tens or hundreds of millions of rows, see [docs/scaling-data.md](./docs/scaling-data.md): serving-grain models, a MetricFlow query API with caching, and how to switch `useQuery` over without changing the pages.
+
 ## Run it
 
 ```sh
