@@ -12,7 +12,7 @@ import type { ManifestMetric, MetricInput } from '@/features/semantic/core/types
 import { useDataset } from '@/features/semantic/data'
 import { exploreHref } from '@/features/semantic/views'
 import { useUrlParams } from '@/hooks/useUrlParams'
-import { navigate } from '@/lib/router'
+import { dashNavigate } from '@/app/hub'
 
 const CATEGORIES = ['All', 'System', 'Rail', 'Bus', 'Line'] as const
 
@@ -87,7 +87,7 @@ export function MetricsPage() {
                   <Button
                     size="sm"
                     variant="soft"
-                    onClick={() => navigate(exploreHref({ metrics: [m.name], groupBy: ['metric_time__month'], where: [], range: 'all', chart: 'line' }, m.label))}
+                    onClick={() => dashNavigate(exploreHref({ metrics: [m.name], groupBy: ['metric_time__month'], where: [], range: 'all', chart: 'line' }, m.label))}
                   >
                     <SlidersHorizontal />
                     Explore

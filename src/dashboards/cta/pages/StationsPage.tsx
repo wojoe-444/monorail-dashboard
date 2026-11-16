@@ -23,7 +23,7 @@ import { useRangeParam } from '@/features/semantic/useRangeParam'
 import { exploreHref } from '@/features/semantic/views'
 import { Delta, ShareOf } from '@/features/transit/Delta'
 import { LineDots } from '@/features/transit/LineChip'
-import { href, navigate } from '@/lib/router'
+import { dashHref, dashNavigate } from '@/app/hub'
 
 interface Row {
   station: Station
@@ -113,7 +113,7 @@ export function StationsPage() {
       label: 'Station',
       sort: (r) => r.station.name,
       render: (r) => (
-        <a href={href(`/rail/station?id=${r.station.id}`)} className="flex min-w-0 flex-col rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+        <a href={dashHref(`/rail/station?id=${r.station.id}`)} className="flex min-w-0 flex-col rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
           <span className="truncate font-medium">{r.station.name}</span>
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             {r.station.sector}
@@ -207,7 +207,7 @@ export function StationsPage() {
             <Button
               variant="outline"
               onClick={() =>
-                navigate(
+                dashNavigate(
                   exploreHref(
                     { metrics: ['rail_avg_weekday_entries', 'rail_avg_weekday_yoy'], groupBy: ['station__station_name'], where, range: preset, custom, chart: 'table' },
                     'Stations',

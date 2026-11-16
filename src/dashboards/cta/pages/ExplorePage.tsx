@@ -25,7 +25,7 @@ import { resolveRange } from '@/features/semantic/ranges'
 import { useQuery } from '@/features/semantic/useQuery'
 import { decodeSpec, encodeSpec, exploreHref, getView, saveView, specFromSavedQuery, useSavedViews, type ChartKind, type ViewSpec } from '@/features/semantic/views'
 import { useUrlParams } from '@/hooks/useUrlParams'
-import { navigate } from '@/lib/router'
+import { dashNavigate } from '@/app/hub'
 
 const DEFAULT_SPEC: ViewSpec = { metrics: ['rail_avg_weekday_entries', 'bus_avg_weekday_boardings'], groupBy: ['metric_time__week'], where: [], range: '1y', chart: 'line' }
 
@@ -81,7 +81,7 @@ export function ExplorePage() {
   }
 
   const open = (next: { q?: string | null; view?: string | null; saved?: string | null }) =>
-    navigate(`/explore?${new URLSearchParams(Object.entries(next).filter((e): e is [string, string] => !!e[1])).toString()}`)
+    dashNavigate(`/explore?${new URLSearchParams(Object.entries(next).filter((e): e is [string, string] => !!e[1])).toString()}`)
 
   return (
     <div className="flex flex-col gap-8">
@@ -140,7 +140,7 @@ export function ExplorePage() {
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => navigate('/board')}>Manage on My board</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => dashNavigate('/board')}>Manage on My board</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

@@ -14,7 +14,7 @@ import { useQueryOrThrow } from '@/features/semantic/useQuery'
 import { useRangeParam } from '@/features/semantic/useRangeParam'
 import { Delta } from '@/features/transit/Delta'
 import { LineChip, LineDots } from '@/features/transit/LineChip'
-import { href, navigate } from '@/lib/router'
+import { dashHref, dashNavigate } from '@/app/hub'
 import { cn } from '@/lib/utils'
 
 
@@ -247,7 +247,7 @@ export function MapPage() {
               {pinned.station.ada ? <Badge variant="success">ADA accessible</Badge> : <Badge variant="secondary">Not ADA accessible</Badge>}
               <Badge variant="outline">{pinned.station.sector}</Badge>
             </div>
-            <Button variant="soft" onClick={() => navigate(`/rail/station?id=${pinned.station.id}`)}>
+            <Button variant="soft" onClick={() => dashNavigate(`/rail/station?id=${pinned.station.id}`)}>
               Station detail
               <ArrowRight />
             </Button>
@@ -262,7 +262,7 @@ export function MapPage() {
             {ranked.map((p) => (
               <li key={p.station.id}>
                 <a
-                  href={href(`/map?${withParam(params, 'focus', p.station.id)}`)}
+                  href={dashHref(`/map?${withParam(params, 'focus', p.station.id)}`)}
                   onMouseEnter={() => setHover(p.station.id)}
                   onMouseLeave={() => setHover(null)}
                   className={cn(

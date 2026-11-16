@@ -23,7 +23,7 @@ import { useQueryOrThrow } from '@/features/semantic/useQuery'
 import { useRangeParam } from '@/features/semantic/useRangeParam'
 import type { ViewSpec } from '@/features/semantic/views'
 import { Delta, ShareOf } from '@/features/transit/Delta'
-import { href } from '@/lib/router'
+import { dashHref } from '@/app/hub'
 
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
@@ -106,7 +106,7 @@ export function BusRoutesPage() {
       label: 'Route',
       sort: (r) => r.route.id,
       render: (r) => (
-        <a href={href(`/bus/route?id=${encodeURIComponent(r.route.id)}`)} className="flex min-w-0 items-center gap-3 rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+        <a href={dashHref(`/bus/route?id=${encodeURIComponent(r.route.id)}`)} className="flex min-w-0 items-center gap-3 rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
           <span className="w-12 shrink-0 font-mono text-sm font-semibold">{r.route.id}</span>
           <span className="truncate">{r.route.name}</span>
         </a>

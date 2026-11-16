@@ -21,7 +21,7 @@ import { useDataset } from '@/features/semantic/data'
 import { formatCompact, formatDay, formatPeriod, formatSignedPercent, formatValue } from '@/features/semantic/format'
 import { useRangeParam } from '@/features/semantic/useRangeParam'
 import { detectExceptions, KIND_LABEL, KIND_VARIANT, type Episode, type ExceptionKind, type Mode } from '@/features/transit/exceptions'
-import { href } from '@/lib/router'
+import { dashHref } from '@/app/hub'
 
 const THRESHOLDS = ['0.25', '0.35', '0.5'] as const
 const MIN_EXPECTED = ['200', '500', '1000', '2500'] as const
@@ -68,7 +68,7 @@ export function ExceptionsPage() {
       sort: (e) => e.entityName,
       render: (e) => (
         <a
-          href={href(e.mode === 'rail' ? `/rail/station?id=${e.entityId}&range=custom&from=${isoOfDay(e.start - 21)}&to=${isoOfDay(Math.min(ds.maxDay, e.end + 21))}` : `/bus/route?id=${encodeURIComponent(e.entityId)}&range=custom&from=${isoOfDay(e.start - 21)}&to=${isoOfDay(Math.min(ds.maxDay, e.end + 21))}`)}
+          href={dashHref(e.mode === 'rail' ? `/rail/station?id=${e.entityId}&range=custom&from=${isoOfDay(e.start - 21)}&to=${isoOfDay(Math.min(ds.maxDay, e.end + 21))}` : `/bus/route?id=${encodeURIComponent(e.entityId)}&range=custom&from=${isoOfDay(e.start - 21)}&to=${isoOfDay(Math.min(ds.maxDay, e.end + 21))}`)}
           className="flex min-w-0 flex-col rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="truncate font-medium">{e.entityName}</span>

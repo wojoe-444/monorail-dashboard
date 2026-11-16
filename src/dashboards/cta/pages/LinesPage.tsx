@@ -17,7 +17,7 @@ import type { ViewSpec } from '@/features/semantic/views'
 import { Delta } from '@/features/transit/Delta'
 import { LineSwatch } from '@/features/transit/LineChip'
 import { useUrlParams } from '@/hooks/useUrlParams'
-import { href } from '@/lib/router'
+import { dashHref } from '@/app/hub'
 
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
@@ -75,7 +75,7 @@ export function LinesPage() {
       label: 'Line',
       sort: (r) => r.line.order,
       render: (r) => (
-        <a href={href(`/lines/line?id=${r.line.id}`)} className="flex items-center gap-2 rounded-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+        <a href={dashHref(`/lines/line?id=${r.line.id}`)} className="flex items-center gap-2 rounded-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
           <LineSwatch line={r.line} />
           {r.line.name}
         </a>
@@ -117,7 +117,7 @@ export function LinesPage() {
         {rows.map((r) => (
           <a
             key={r.line.id}
-            href={href(`/lines/line?id=${r.line.id}`)}
+            href={dashHref(`/lines/line?id=${r.line.id}`)}
             className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Card className="h-full gap-0 px-4 py-4 transition-colors hover:bg-accent">

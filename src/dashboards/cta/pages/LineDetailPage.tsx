@@ -19,7 +19,7 @@ import { useRangeParam } from '@/features/semantic/useRangeParam'
 import type { ViewSpec } from '@/features/semantic/views'
 import { Delta, ShareOf } from '@/features/transit/Delta'
 import { LineDots, LineSwatch } from '@/features/transit/LineChip'
-import { href, navigate } from '@/lib/router'
+import { dashHref, dashNavigate } from '@/app/hub'
 
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
@@ -39,7 +39,7 @@ export function LineDetailPage() {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader title="Line not found" description={id ? `No line with id "${id}".` : 'No line selected.'} />
-        <Button variant="outline" className="w-fit" onClick={() => navigate('/lines')}>
+        <Button variant="outline" className="w-fit" onClick={() => dashNavigate('/lines')}>
           <ArrowLeft />
           All lines
         </Button>
@@ -86,7 +86,7 @@ function LineDetail({ lineId }: { lineId: string }) {
       label: 'Station',
       sort: (r) => r.station.name,
       render: (r) => (
-        <a href={href(`/rail/station?id=${r.station.id}`)} className="rounded-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+        <a href={dashHref(`/rail/station?id=${r.station.id}`)} className="rounded-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
           {r.station.name}
         </a>
       ),

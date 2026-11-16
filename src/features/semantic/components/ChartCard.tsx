@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { navigate } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
+import { semanticPath } from '../config'
 import type { QueryResult } from '../core/types.ts'
 import { downloadCsv } from '../csv'
 import { useDataset } from '../data'
@@ -88,7 +89,7 @@ export function ChartCard({ title, description, view, result, children, table, c
               </Tooltip>
               <DropdownMenuContent align="end">
                 {view && (
-                  <DropdownMenuItem onSelect={() => navigate(exploreHref(view, title))}>
+                  <DropdownMenuItem onSelect={() => navigate(semanticPath(exploreHref(view, title)))}>
                     <SlidersHorizontal />
                     Open in Explore
                   </DropdownMenuItem>

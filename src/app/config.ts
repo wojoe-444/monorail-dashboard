@@ -6,7 +6,7 @@
  */
 export const APP = {
   name: 'Monorail Ops',
-  tagline: 'CTA ridership',
+  tagline: 'Transit dashboards',
   storagePrefix: 'monorail-dashboard',
   /** Light or dark until the person picks one in Settings > Appearance. */
   defaultMode: 'light' as 'light' | 'dark',

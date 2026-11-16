@@ -11,7 +11,7 @@ import { ViewCard } from '@/features/semantic/components/ViewCard'
 import { useDataset } from '@/features/semantic/data'
 import { RANGE_PRESETS } from '@/features/semantic/ranges'
 import { deleteView, moveView, saveView, setPinned, specFromSavedQuery, useSavedViews, type SavedView } from '@/features/semantic/views'
-import { navigate } from '@/lib/router'
+import { dashHref, dashNavigate } from '@/app/hub'
 
 export function BoardPage() {
   const { engine } = useDataset()
@@ -37,7 +37,7 @@ export function BoardPage() {
         title="My board"
         description="Your own dashboard: views you built in Explore or pinned from any chart. Saved in this browser."
         actions={
-          <Button onClick={() => navigate('/explore')}>
+          <Button onClick={() => dashNavigate('/explore')}>
             <Plus />
             New view
           </Button>
@@ -72,7 +72,7 @@ export function BoardPage() {
               height={260}
               controls={
                 <span className="flex items-center">
-                  {iconButton('Edit in Explore', <Pencil />, () => navigate(`/explore?view=${v.id}`))}
+                  {iconButton('Edit in Explore', <Pencil />, () => dashNavigate(`/explore?view=${v.id}`))}
                   {i > 0 && iconButton('Move earlier', <ArrowUp />, () => moveView(v.id, -1))}
                   {i < pinned.length - 1 && iconButton('Move later', <ArrowDown />, () => moveView(v.id, 1))}
                   {iconButton('Unpin', <PinOff />, () => setPinned(v.id, false))}
@@ -93,7 +93,7 @@ export function BoardPage() {
             <ul className="flex flex-col divide-y">
               {views.map((v) => (
                 <li key={v.id} className="flex flex-wrap items-center gap-3 py-2">
-                  <a href={`#/explore?view=${v.id}`} className="min-w-0 flex-1 rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+                  <a href={dashHref(`/explore?view=${v.id}`)} className="min-w-0 flex-1 rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
                     <span className="block truncate text-sm font-medium">{v.name}</span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {v.spec.metrics.map((m) => (engine.hasMetric(m) ? engine.metric(m).label : `${m} (removed)`)).join(', ')} ·{' '}
