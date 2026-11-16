@@ -18,7 +18,7 @@ import type { QueryResult } from '@/features/semantic/core/types.ts'
 import { downloadCsv } from '@/features/semantic/csv'
 import { useDataset, type Route } from '@/features/semantic/data'
 import { formatCompact, formatPercent, formatValue } from '@/features/semantic/format'
-import { baseline2019, recentWeeks } from '@/features/semantic/ranges'
+import { baseline2019, countDayType, recentWeeks, weekStarts } from '@/features/semantic/ranges'
 import { useQueryOrThrow } from '@/features/semantic/useQuery'
 import { useRangeParam } from '@/features/semantic/useRangeParam'
 import type { ViewSpec } from '@/features/semantic/views'
@@ -56,13 +56,22 @@ export function BusRoutesPage() {
   const base = baseline2019(window)
   const before = useQueryOrThrow({ metrics: ['bus_avg_weekday_boardings'], groupBy: ['route'], timeRange: base ?? window })
   const weekly = useQueryOrThrow({ metrics: ['bus_boardings'], groupBy: ['route', 'metric_time__week'], timeRange: recentWeeks(ds.maxDay) })
+  // Totals across routes divide weekday boardings by the system's weekdays, not by each route's
+  // reporting days, so a route that ran only on event days does not count as a full-time route.
+  const weekdayBoardings = new Map(
+    useQueryOrThrow({ metrics: ['bus_boardings'], groupBy: ['route'], where: ["{{ Dimension('service_day__day_type') }} = 'Weekday'"], timeRange: window }).rows.map((r) => [String(r.route), num(r.bus_boardings) ?? 0]),
+  )
+  const systemWeekdays = countDayType(ds.dayType, window, 'Weekday')
 
   const by = new Map(current.rows.map((r) => [String(r.route), r]))
   const by2019 = new Map(before.rows.map((r) => [String(r.route), num(r.bus_avg_weekday_boardings)]))
+  // One slot per week, so a missing week stays a gap at its own position instead of shifting the line.
+  const weeks = weekStarts(recentWeeks(ds.maxDay))
   const trendBy = new Map<string, number[]>()
   for (const r of weekly.rows) {
-    const arr = trendBy.get(String(r.route)) ?? []
-    arr.push(num(r.bus_boardings) ?? 0)
+    const arr = trendBy.get(String(r.route)) ?? weeks.map(() => 0)
+    const i = weeks.indexOf(String(r.metric_time__week))
+    if (i >= 0) arr[i] = num(r.bus_boardings) ?? 0
     trendBy.set(String(r.route), arr)
   }
   const total = current.rows.reduce((a, r) => a + (num(r.bus_boardings) ?? 0), 0)
@@ -88,7 +97,7 @@ export function BusRoutesPage() {
   const rows = allRows.filter((r) => (type === 'all' || r.route.type === type) && (!needle || r.route.id.toLowerCase() === needle || r.route.name.toLowerCase().includes(needle) || r.route.id.toLowerCase().startsWith(needle)))
 
   const typeWhere = type === 'all' ? [] : [`{{ Dimension('route__route_type') }} = '${type}'`]
-  const typeView: ViewSpec = { metrics: ['bus_avg_weekday_boardings'], groupBy: ['metric_time__month', 'route__route_type'], where: [], range: '3y', chart: 'stacked' }
+  const typeView: ViewSpec = { metrics: ['bus_avg_weekday_boardings'], groupBy: ['metric_time__month', 'route__route_type'], where: [], range: '3y', chart: 'line' }
   const byType = useQueryOrThrow({ metrics: typeView.metrics, groupBy: typeView.groupBy, timeRange: { start: baseline3y(ds.maxIso), end: ds.maxIso } })
 
   const columns: SortColumn<Row>[] = [
@@ -133,12 +142,10 @@ export function BusRoutesPage() {
     downloadCsv(result, `bus routes ${window.start} to ${window.end}`)
   }
 
-  const weekdayTotal = rows.reduce((a, r) => a + (r.weekday ?? 0), 0)
-  const top10Share = (() => {
-    const sorted = [...rows].sort((a, b) => (b.weekday ?? 0) - (a.weekday ?? 0))
-    const t = sorted.slice(0, 10).reduce((a, r) => a + (r.weekday ?? 0), 0)
-    return weekdayTotal ? t / weekdayTotal : null
-  })()
+  const shownWeekdayBoardings = rows.map((r) => weekdayBoardings.get(r.route.id) ?? 0)
+  const weekdaySum = shownWeekdayBoardings.reduce((a, b) => a + b, 0)
+  const weekdayTotal = systemWeekdays ? weekdaySum / systemWeekdays : null
+  const top10Share = weekdaySum ? [...shownWeekdayBoardings].sort((a, b) => b - a).slice(0, 10).reduce((a, b) => a + b, 0) / weekdaySum : null
   const growing = rows.filter((r) => (r.yoy ?? 0) > 0).length
   const withYoy = rows.filter((r) => r.yoy !== null).length
 
@@ -185,13 +192,13 @@ export function BusRoutesPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile label="Routes" value={String(rows.length)} hint={rows.length !== allRows.length ? `of ${allRows.length}` : 'reporting in period'} />
-        <StatTile label="Avg weekday boardings" value={formatCompact(weekdayTotal)} hint="sum of the routes shown" />
+        <StatTile label="Avg weekday boardings" value={formatCompact(weekdayTotal)} hint={`routes shown, per weekday (${systemWeekdays} in period)`} />
         <StatTile label="Top 10 routes carry" value={top10Share !== null ? formatPercent(top10Share, 0) : '—'} hint="of weekday boardings shown" />
         <StatTile label="Growing vs 52 wks" value={withYoy ? `${growing} of ${withYoy}` : '—'} hint={withYoy ? formatPercent(growing / withYoy, 0) : undefined} />
       </div>
 
       <ChartCard title="Weekday boardings by route type, last 3 years" description="Average weekday boardings per month. Shuttles replace rail during closures." view={{ ...typeView, where: typeWhere }} result={byType}>
-        <ResultChart result={byType} chart="stacked" title="Average weekday boardings by route type" height={240} />
+        <ResultChart result={byType} chart="line" title="Average weekday boardings by route type" height={240} />
       </ChartCard>
 
       <Card className="py-2">

@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ChartCard } from '@/features/semantic/components/ChartCard'
 import { RangeControl } from '@/features/semantic/components/RangeControl'
 import { useDataset, type Station } from '@/features/semantic/data'
-import { formatCompact, formatPercent, formatPeriod, formatValue } from '@/features/semantic/format'
+import { formatCompact, formatPercent, formatPeriod, formatValue, ratioOf } from '@/features/semantic/format'
 import { pivotResult } from '@/features/semantic/pivot'
 import { baseline2019 } from '@/features/semantic/ranges'
 import { useQueryOrThrow } from '@/features/semantic/useQuery'
@@ -56,10 +56,10 @@ function LineDetail({ lineId }: { lineId: string }) {
   const lineWhere = [`{{ Entity('line') }} = '${line.id}'`]
   const stations = ds.stations.filter((s) => s.lines.includes(line.name))
 
-  const kpi = useQueryOrThrow({ metrics: ['line_avg_weekday_allocated', 'line_avg_weekday_yoy', 'line_avg_daily_allocated'], where: lineWhere, timeRange: window }).rows[0]
+  const kpi = useQueryOrThrow({ metrics: ['line_avg_weekday_allocated', 'line_avg_weekday_yoy', 'line_avg_daily_allocated'], where: lineWhere, timeRange: window }).rows[0] ?? {}
   const base = baseline2019(window)
-  const kpi2019 = useQueryOrThrow({ metrics: ['line_avg_weekday_allocated'], where: lineWhere, timeRange: base ?? window }).rows[0]
-  const recovery = base && num(kpi.line_avg_weekday_allocated) && num(kpi2019.line_avg_weekday_allocated) ? (kpi.line_avg_weekday_allocated as number) / (kpi2019.line_avg_weekday_allocated as number) : null
+  const kpi2019 = useQueryOrThrow({ metrics: ['line_avg_weekday_allocated'], where: lineWhere, timeRange: base ?? window }).rows[0] ?? {}
+  const recovery = base ? ratioOf(num(kpi.line_avg_weekday_allocated), num(kpi2019.line_avg_weekday_allocated)) : null
 
   const monthlyView: ViewSpec = { metrics: ['line_avg_weekday_allocated'], groupBy: ['metric_time__month'], where: lineWhere, range: 'all', chart: 'line' }
   const monthly = useQueryOrThrow({ metrics: monthlyView.metrics, groupBy: monthlyView.groupBy, where: lineWhere })
@@ -104,7 +104,7 @@ function LineDetail({ lineId }: { lineId: string }) {
       <PageHeader
         eyebrow="'L' line"
         title={`${line.name} Line`}
-        description={`${stations.length} stations · ${adaCount} ADA accessible · entries at transfer stations split evenly across their lines.`}
+        description={`${stations.length} stations · ${adaCount} ADA accessible · entries at transfer stations split across their all-day lines.`}
       />
       <div className="flex flex-wrap items-center gap-3">
         <span className="flex items-center gap-2 rounded-full border px-3 py-1 text-sm">

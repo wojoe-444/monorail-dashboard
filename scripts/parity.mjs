@@ -33,7 +33,13 @@ const QUERIES = [
   { metrics: ['bus_boardings'], groupBy: ['metric_time__month', 'route__route_name'], where: [W, "{{ Dimension('route__route_type') }} != 'Local'"], timeRange: { start: '2025-06-01', end: '2026-08-31' } },
   { metrics: ['total_avg_weekday_rides', 'total_rides_yoy'], groupBy: ['metric_time__month', 'service_day__is_holiday'], timeRange: { start: '2025-09-01', end: '2026-08-31' } },
   { metrics: ['line_avg_weekday_yoy'], groupBy: ['metric_time__quarter', 'line__line_name', 'station__sector'], timeRange: { start: '2025-01-01', end: '2026-06-30' } },
+  // Ranges that cut through a period: both engines widen to whole periods of the grain.
+  { metrics: ['rail_entries'], groupBy: ['metric_time__month'], timeRange: { start: '2026-08-15', end: '2026-08-20' } },
+  { metrics: ['rail_entries', 'bus_boardings_ly'], groupBy: ['metric_time__week'], timeRange: { start: '2026-08-12', end: '2026-08-13' } },
+  { metrics: ['rail_avg_weekday_entries', 'rail_avg_weekday_yoy'], groupBy: ['metric_time__quarter', 'station__sector'], timeRange: { start: '2026-05-10', end: '2026-08-20' } },
 ]
+
+import { resolveRange } from '../src/features/semantic/ranges.ts'
 
 const tables = buildTables(Object.fromEntries(SNAPSHOT_TABLES.map((t) => [t, JSON.parse(readFileSync(join(ROOT, 'public', 'data', 'cta', `${t}.json`), 'utf8'))])))
 const manifest = JSON.parse(readFileSync(join(ROOT, 'src', 'features', 'semantic', 'manifest.json'), 'utf8'))
@@ -68,14 +74,29 @@ const norm = (v) => {
 }
 
 let failures = 0
+// Every shipped team view (MetricFlow saved query) must run in MetricFlow and match the app.
+for (const sq of manifest.savedQueries) {
+  const range = resolveRange(sq.meta.range ?? '1y', engine.minDay, engine.maxDay, { start: sq.meta.start, end: sq.meta.end })
+  QUERIES.push({ saved: sq.name, metrics: sq.metrics, groupBy: sq.groupBy, where: sq.where, orderBy: sq.orderBy, limit: sq.limit, timeRange: range })
+}
+
 QUERIES.forEach((q, i) => {
   const csv = join(OUT, `q${i}.csv`)
-  const args = ['query', '--metrics', q.metrics.join(','), '--csv', csv]
-  if (q.groupBy?.length) args.push('--group-by', q.groupBy.join(','))
+  const args = q.saved ? ['query', '--saved-query', q.saved, '--csv', csv] : ['query', '--metrics', q.metrics.join(','), '--csv', csv]
+  if (!q.saved && q.groupBy?.length) args.push('--group-by', q.groupBy.join(','))
   if (q.timeRange?.start) args.push('--start-time', q.timeRange.start)
   if (q.timeRange?.end) args.push('--end-time', q.timeRange.end)
-  for (const w of q.where ?? []) args.push('--where', w)
-  execFileSync('mf', args, { cwd: SEMANTIC, stdio: 'pipe', env: { ...process.env, PYTHONUTF8: '1' } })
+  if (!q.saved) for (const w of q.where ?? []) args.push('--where', w)
+  try {
+    execFileSync('mf', args, { cwd: SEMANTIC, stdio: 'pipe', env: { ...process.env, PYTHONUTF8: '1' } })
+  } catch (e) {
+    failures++
+    const reason = String(e.stderr ?? e.message)
+      .split('\n')
+      .find((l) => /error|message/i.test(l))
+    console.log(`FAIL q${i} ${q.saved ? `saved query ${q.saved}` : q.metrics.join(', ')}: MetricFlow could not run it\n  ${reason ?? ''}`)
+    return
+  }
   const expected = parseCsv(readFileSync(csv, 'utf8'))
   const actual = engine.query(q).rows
   const keyOf = (r) => (q.groupBy ?? []).map((k) => norm(r[k])).join('|')
@@ -98,7 +119,7 @@ QUERIES.forEach((q, i) => {
       if (!same) problems.push(`${keyOf(e)} ${m}: engine ${av}, MetricFlow ${ev}`)
     }
   }
-  const label = `${q.metrics.join(', ')} by ${(q.groupBy ?? []).join(', ') || '(total)'}`
+  const label = `${q.saved ? `saved query ${q.saved}: ` : ''}${q.metrics.join(', ')} by ${(q.groupBy ?? []).join(', ') || '(total)'}`
   if (problems.length) {
     failures++
     console.log(`FAIL q${i} ${label}\n  ${problems.slice(0, 6).join('\n  ')}${problems.length > 6 ? `\n  ... ${problems.length - 6} more` : ''}`)

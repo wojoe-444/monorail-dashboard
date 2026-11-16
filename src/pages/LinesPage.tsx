@@ -10,7 +10,7 @@ import { RangeControl } from '@/features/semantic/components/RangeControl'
 import { ResultChart } from '@/features/semantic/components/ResultChart'
 import { useDataset, type Line } from '@/features/semantic/data'
 import { formatCompact, formatPercent, formatValue } from '@/features/semantic/format'
-import { recentWeeks } from '@/features/semantic/ranges'
+import { recentWeeks, weekStarts } from '@/features/semantic/ranges'
 import { useQueryOrThrow } from '@/features/semantic/useQuery'
 import { useRangeParam } from '@/features/semantic/useRangeParam'
 import type { ViewSpec } from '@/features/semantic/views'
@@ -44,6 +44,7 @@ export function LinesPage() {
     timeRange: window,
   })
   const weekly = useQueryOrThrow({ metrics: ['line_entries_allocated'], groupBy: ['line__line_name', 'metric_time__week'], timeRange: recentWeeks(ds.maxDay) })
+  const weeks = weekStarts(recentWeeks(ds.maxDay))
   const total = current.rows.reduce((a, r) => a + (num(r.line_entries_allocated) ?? 0), 0)
 
   const rows: Row[] = ds.lines.map((line) => {
@@ -57,7 +58,7 @@ export function LinesPage() {
       reach: days && num(r?.line_station_entries) !== null ? (r!.line_station_entries as number) / days : null,
       share: total && num(r?.line_entries_allocated) !== null ? (r!.line_entries_allocated as number) / total : null,
       ada: stations.length ? stations.filter((s) => s.ada).length / stations.length : 0,
-      trend: weekly.rows.filter((w) => w.line__line_name === line.name).map((w) => num(w.line_entries_allocated) ?? 0),
+      trend: weeks.map((wk) => num(weekly.rows.find((w) => w.line__line_name === line.name && w.metric_time__week === wk)?.line_entries_allocated) ?? 0),
     }
   })
 
@@ -80,7 +81,7 @@ export function LinesPage() {
         </a>
       ),
     },
-    { key: 'allocated', label: 'Avg weekday (allocated)', title: 'Entries split evenly across the lines at each station', align: 'right', sort: (r) => r.allocated, render: (r) => formatValue(r.allocated) },
+    { key: 'allocated', label: 'Avg weekday (allocated)', title: 'Entries split evenly across the lines that run at each station all day', align: 'right', sort: (r) => r.allocated, render: (r) => formatValue(r.allocated) },
     { key: 'yoy', label: 'vs 52 wks', align: 'right', sort: (r) => r.yoy, render: (r) => <Delta v={r.yoy} /> },
     { key: 'share', label: 'Share', title: 'Share of all allocated weekday entries', align: 'right', sort: (r) => r.share, render: (r) => (r.share !== null ? formatPercent(r.share, 1) : '—') },
     {
@@ -107,7 +108,7 @@ export function LinesPage() {
       <div className="flex gap-3 rounded-xl bg-info-soft px-4 py-3 text-sm text-info-soft-foreground">
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
         <p>
-          Turnstiles count entries per station, not per line. <strong>Allocated</strong> entries split a transfer station's count evenly across its lines, so lines add up to the
+          Turnstiles count entries per station, not per line. <strong>Allocated</strong> entries split a transfer station's count evenly across the lines that run there all day (the Purple Line Express, which stops south of Howard only at weekday rush, gets no share there), so lines add up to the
           system total. <strong>At its stations</strong> counts the whole station for every line that stops there: it shows a line's reach, and never adds up across lines.
         </p>
       </div>

@@ -1,7 +1,10 @@
 # Team views: MetricFlow saved queries. They show in the dashboard's Explore page as shared,
 # reviewed views (anyone can open one and save a personal copy). Run one with:
 #   mf query --saved-query weekday_by_line_monthly --start-time 2025-01-01
-# config.meta.chart: line | bar | table; config.meta.range: a range preset (90d, 1y, 3y, all, ...).
+# config.meta.chart: line | bar | stacked | table; config.meta.range: a range preset (28d, 90d, 1y, 3y, all, ...),
+# or range: custom with start/end dates; config.meta.smooth: rolling-average days for daily lines.
+# Every saved query must run in MetricFlow: scripts/parity.mjs runs each one through mf and the app.
+# ("52 weeks earlier" metrics need metric_time in group_by, so rankings without time leave them out.)
 saved_queries:
   - name: system_daily_ridership
     label: System ridership, daily
@@ -23,10 +26,11 @@ saved_queries:
 
   - name: station_weekday_ranking
     label: Station ranking, weekday entries
-    description: Average weekday entries per station and the change vs 52 weeks earlier.
+    description: Average weekday, Saturday and Sunday/holiday entries per station, busiest first.
     query_params:
-      metrics: [rail_avg_weekday_entries, rail_avg_weekday_yoy]
+      metrics: [rail_avg_weekday_entries, rail_avg_saturday_entries, rail_avg_sunday_entries]
       group_by: ["Dimension('station__station_name')"]
+      order_by: ["Metric('rail_avg_weekday_entries').descending(True)"]
     config:
       meta: { chart: table, range: 28d }
 
@@ -46,14 +50,15 @@ saved_queries:
       metrics: [total_rides]
       group_by: ["TimeDimension('metric_time', 'month')", "Dimension('service_day__day_type')"]
     config:
-      meta: { chart: bar, range: 3y }
+      meta: { chart: stacked, range: 3y }
 
   - name: bus_route_ranking
     label: Bus route ranking, weekday boardings
-    description: Average weekday boardings per route and the change vs 52 weeks earlier.
+    description: Average weekday, Saturday and Sunday/holiday boardings per route, busiest first.
     query_params:
-      metrics: [bus_avg_weekday_boardings, bus_avg_weekday_yoy]
+      metrics: [bus_avg_weekday_boardings, bus_avg_saturday_boardings, bus_avg_sunday_boardings]
       group_by: ["Dimension('route__route_name')"]
+      order_by: ["Metric('bus_avg_weekday_boardings').descending(True)"]
     config:
       meta: { chart: table, range: 28d }
 

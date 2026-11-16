@@ -85,11 +85,21 @@ export function baseline2019(w: TimeWindow): TimeWindow | null {
   const e = dayOfIso(w.end)
   const years = Number(w.end.slice(0, 4)) - 2019
   if (years <= 0) return null
-  const shift = Math.round((years * 365.25) / 7) * 7
+  let shift = Math.round((years * 365.25) / 7) * 7
+  // Whole weeks keep weekdays aligned; step a week later if the window would start before the data.
+  while (s - shift < dayOfIso('2019-01-01')) shift -= 7
   const bs = s - shift
   const be = e - shift
-  if (bs < dayOfIso('2019-01-01')) return null
+  // The baseline is pre-pandemic: a window that would run into March 2020 has no clean comparison.
+  if (be > dayOfIso('2020-02-29')) return null
   return { start: isoOfDay(bs), end: isoOfDay(be) }
+}
+
+/** Holidays (weekdays on a Sunday schedule) in a window. */
+export function countHolidays(holidays: Set<number>, w: TimeWindow): number {
+  let n = 0
+  for (let d = dayOfIso(w.start); d <= dayOfIso(w.end); d++) if (holidays.has(d)) n++
+  return n
 }
 
 /** A sensible chart grain for a window length. */
@@ -104,8 +114,22 @@ export function lastCompleteWeekEnd(day: number): number {
   return dow === 7 ? day : day - dow
 }
 
+/** Week-start ISO dates (Mondays) of the complete weeks in `recentWeeks`, to align sparklines. */
+export function weekStarts(w: TimeWindow): string[] {
+  const out: string[] = []
+  for (let d = dayOfIso(w.start); d <= dayOfIso(w.end); d += 7) out.push(isoOfDay(d))
+  return out
+}
+
 /** The last `weeks` complete ISO weeks, for weekly sparklines. */
 export function recentWeeks(maxDay: number, weeks = 12): TimeWindow {
   const end = lastCompleteWeekEnd(maxDay)
   return { start: isoOfDay(end - weeks * 7 + 1), end: isoOfDay(end) }
+}
+
+/** Days in a window with a given CTA day type (e.g. 'Weekday'), from the service-day calendar. */
+export function countDayType(dayType: Map<number, string>, w: TimeWindow, type: string): number {
+  let n = 0
+  for (let d = dayOfIso(w.start); d <= dayOfIso(w.end); d++) if (dayType.get(d) === type) n++
+  return n
 }

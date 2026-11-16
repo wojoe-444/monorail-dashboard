@@ -71,7 +71,9 @@ export interface SavedQuery {
   metrics: string[]
   groupBy: string[]
   where: string[]
-  meta: { chart?: string; range?: string }
+  orderBy?: { key: string; desc: boolean }[]
+  limit?: number
+  meta: { chart?: string; range?: string; start?: string; end?: string; smooth?: number }
 }
 
 export interface SemanticManifest {
@@ -107,6 +109,8 @@ export interface ResultColumn {
   grain?: Grain
   format?: MetricFormat
   description?: string
+  /** Metric values add up across groups (safe to stack or total). */
+  additive?: boolean
 }
 
 export interface QueryResult {

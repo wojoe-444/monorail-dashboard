@@ -14,7 +14,7 @@ import { ChartCard } from '@/features/semantic/components/ChartCard'
 import { RangeControl } from '@/features/semantic/components/RangeControl'
 import { dayOfIso, isoOfDay } from '@/features/semantic/core/time.ts'
 import { useDataset } from '@/features/semantic/data'
-import { formatCompact, formatDay, formatPercent, formatPeriod, formatRange, formatSignedPercent, formatValue } from '@/features/semantic/format'
+import { formatCompact, formatDay, formatPercent, formatPeriod, formatRange, formatSignedPercent, formatValue, ratioOf } from '@/features/semantic/format'
 import { pivotResult } from '@/features/semantic/pivot'
 import { baseline2019, resolveRange } from '@/features/semantic/ranges'
 import { useQueryOrThrow } from '@/features/semantic/useQuery'
@@ -65,16 +65,16 @@ function StationDetail({ stationId }: { stationId: string }) {
     metrics: ['rail_avg_weekday_entries', 'rail_avg_weekday_yoy', 'rail_avg_saturday_entries', 'rail_avg_sunday_entries', 'rail_entries', 'rail_entries_yoy'],
     where,
     timeRange: window,
-  }).rows[0]
+  }).rows[0] ?? {}
   const base = baseline2019(window)
-  const kpi2019 = useQueryOrThrow({ metrics: ['rail_avg_weekday_entries'], where, timeRange: base ?? window }).rows[0]
-  const recovery = base && num(kpi.rail_avg_weekday_entries) && num(kpi2019.rail_avg_weekday_entries) ? (kpi.rail_avg_weekday_entries as number) / (kpi2019.rail_avg_weekday_entries as number) : null
+  const kpi2019 = useQueryOrThrow({ metrics: ['rail_avg_weekday_entries'], where, timeRange: base ?? window }).rows[0] ?? {}
+  const recovery = base ? ratioOf(num(kpi.rail_avg_weekday_entries), num(kpi2019.rail_avg_weekday_entries)) : null
 
   // Rank among all stations by average weekday entries in the period.
   const ranking = useQueryOrThrow({ metrics: ['rail_avg_weekday_entries'], groupBy: ['station'], timeRange: window }).rows.filter((r) => num(r.rail_avg_weekday_entries) !== null)
   const rank = ranking.findIndex((r) => r.station === station.id) + 1
 
-  const dailyView: ViewSpec = { metrics: ['rail_entries', 'rail_entries_ly'], groupBy: ['metric_time__day'], where, range: preset, custom, chart: 'line' }
+  const dailyView: ViewSpec = { metrics: ['rail_entries', 'rail_entries_ly'], groupBy: ['metric_time__day'], where, range: preset, custom, chart: 'line', smooth: smooth === '7d' ? 7 : undefined }
   const daily = useQueryOrThrow({ metrics: ['rail_entries', 'rail_entries_ly'], groupBy: ['metric_time__day'], where, timeRange: window })
   const dailyPivot = pivotResult(daily, { smooth: smooth === '7d' ? 7 : undefined })
 
@@ -105,7 +105,12 @@ function StationDetail({ stationId }: { stationId: string }) {
     cells.push({ day: d, value: calendar === 'volume' ? num(r?.rail_entries) : num(r?.rail_entries_yoy) })
   }
 
-  const exceptions = detectExceptions(ds, { start: dayOfIso(year.start), end: ds.maxDay, threshold: 0.35, minExpected: 200, modes: ['rail'], entityIds: [station.id] })
+  // Exceptions over the selected period, or the last 12 months when the period is shorter (markers and the list agree).
+  const excStart = Math.min(dayOfIso(window.start), dayOfIso(year.start))
+  const exceptions = detectExceptions(ds, { start: excStart, end: dayOfIso(window.end), threshold: 0.35, minExpected: 200, modes: ['rail'], entityIds: [station.id] })
+
+  // An ongoing zero-count or no-data episode is a closure or a feed outage: say so up top.
+  const outage = exceptions.find((e) => e.ongoing && (e.kind === 'zero' || e.kind === 'missing'))
 
   const nearby = ds.stations
     .filter((s) => s.id !== station.id)
@@ -147,6 +152,11 @@ function StationDetail({ stationId }: { stationId: string }) {
         ))}
         {station.isTransfer && <Badge variant="info">Transfer station</Badge>}
         {stale && <Badge variant="warning">No data since {formatDay(station.lastDay!)}</Badge>}
+        {outage && (
+          <Badge variant={outage.kind === 'zero' ? 'destructive' : 'warning'}>
+            {outage.kind === 'zero' ? 'Reporting zero entries' : 'No data'} since {formatDay(outage.start)}
+          </Badge>
+        )}
         <span className="flex-1" />
         <RangeControl value={preset} custom={custom} onChange={setRange} presets={['28d', '90d', '6m', '1y', 'ytd', 'all']} />
       </div>
@@ -264,7 +274,7 @@ function StationDetail({ stationId }: { stationId: string }) {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card className="gap-4 xl:col-span-2">
           <CardHeader>
-            <CardTitle>Exceptions, last 12 months</CardTitle>
+            <CardTitle>Exceptions{dayOfIso(window.start) < dayOfIso(year.start) ? `, ${formatRange(window.start, window.end)}` : ', last 12 months'}</CardTitle>
             <CardDescription>Days 35%+ off the usual pattern for that weekday (median of the previous 8 weeks).</CardDescription>
           </CardHeader>
           <CardContent>

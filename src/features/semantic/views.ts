@@ -89,10 +89,13 @@ export function setPinned(id: string, pinned: boolean) {
   emit(views.map((v) => (v.id === id ? { ...v, pinned } : v)))
 }
 
+/** Move a pinned view past its neighbouring pinned view (unpinned views keep their places). */
 export function moveView(id: string, delta: -1 | 1) {
   const i = views.findIndex((v) => v.id === id)
-  const j = i + delta
-  if (i < 0 || j < 0 || j >= views.length) return
+  if (i < 0) return
+  let j = i + delta
+  while (j >= 0 && j < views.length && !views[j].pinned) j += delta
+  if (j < 0 || j >= views.length) return
   const next = [...views]
   ;[next[i], next[j]] = [next[j], next[i]]
   emit(next)
@@ -101,7 +104,17 @@ export function moveView(id: string, delta: -1 | 1) {
 export function specFromSavedQuery(q: SavedQuery): ViewSpec {
   const chart = (['line', 'bar', 'stacked', 'table'] as const).find((c) => c === q.meta.chart) ?? 'line'
   const range = (q.meta.range as RangePreset | undefined) ?? '1y'
-  return { metrics: q.metrics, groupBy: q.groupBy, where: q.where, range, chart: chart === 'bar' && q.groupBy.length > 1 ? 'stacked' : chart }
+  return {
+    metrics: q.metrics,
+    groupBy: q.groupBy,
+    where: q.where,
+    range,
+    custom: range === 'custom' ? { start: q.meta.start, end: q.meta.end } : undefined,
+    chart,
+    smooth: q.meta.smooth || undefined,
+    limit: q.limit,
+    orderBy: q.orderBy?.[0],
+  }
 }
 
 // URL encoding, so any view is a link: #/explore?q=<base64url JSON>

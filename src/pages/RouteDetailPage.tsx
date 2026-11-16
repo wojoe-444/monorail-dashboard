@@ -14,7 +14,7 @@ import { ChartCard } from '@/features/semantic/components/ChartCard'
 import { RangeControl } from '@/features/semantic/components/RangeControl'
 import { dayOfIso, isoOfDay } from '@/features/semantic/core/time.ts'
 import { useDataset } from '@/features/semantic/data'
-import { formatCompact, formatDay, formatPercent, formatPeriod, formatRange, formatSignedPercent, formatValue } from '@/features/semantic/format'
+import { formatCompact, formatDay, formatPercent, formatPeriod, formatRange, formatSignedPercent, formatValue, ratioOf } from '@/features/semantic/format'
 import { pivotResult } from '@/features/semantic/pivot'
 import { baseline2019, priorYear, resolveRange } from '@/features/semantic/ranges'
 import { useQueryOrThrow } from '@/features/semantic/useQuery'
@@ -56,14 +56,14 @@ function RouteDetail({ routeId }: { routeId: string }) {
     metrics: ['bus_avg_weekday_boardings', 'bus_avg_weekday_yoy', 'bus_avg_saturday_boardings', 'bus_avg_sunday_boardings'],
     where,
     timeRange: window,
-  }).rows[0]
+  }).rows[0] ?? {}
   const base = baseline2019(window)
-  const kpi2019 = useQueryOrThrow({ metrics: ['bus_avg_weekday_boardings'], where, timeRange: base ?? window }).rows[0]
-  const recovery = base && num(kpi.bus_avg_weekday_boardings) && num(kpi2019.bus_avg_weekday_boardings) ? (kpi.bus_avg_weekday_boardings as number) / (kpi2019.bus_avg_weekday_boardings as number) : null
+  const kpi2019 = useQueryOrThrow({ metrics: ['bus_avg_weekday_boardings'], where, timeRange: base ?? window }).rows[0] ?? {}
+  const recovery = base ? ratioOf(num(kpi.bus_avg_weekday_boardings), num(kpi2019.bus_avg_weekday_boardings)) : null
   const ranking = useQueryOrThrow({ metrics: ['bus_avg_weekday_boardings'], groupBy: ['route'], timeRange: window }).rows.filter((r) => num(r.bus_avg_weekday_boardings) !== null)
   const rank = ranking.findIndex((r) => r.route === route.id) + 1
 
-  const dailyView: ViewSpec = { metrics: ['bus_boardings', 'bus_boardings_ly'], groupBy: ['metric_time__day'], where, range: preset, custom, chart: 'line' }
+  const dailyView: ViewSpec = { metrics: ['bus_boardings', 'bus_boardings_ly'], groupBy: ['metric_time__day'], where, range: preset, custom, chart: 'line', smooth: smooth === '7d' ? 7 : undefined }
   const daily = useQueryOrThrow({ metrics: dailyView.metrics, groupBy: dailyView.groupBy, where, timeRange: window })
   const dailyPivot = pivotResult(daily, { smooth: smooth === '7d' ? 7 : undefined })
 
@@ -86,7 +86,7 @@ function RouteDetail({ routeId }: { routeId: string }) {
   const cells = []
   for (let d = dayOfIso(year.start); d <= ds.maxDay; d++) cells.push({ day: d, value: num(calBy.get(d)?.[calendar === 'volume' ? 'bus_boardings' : 'bus_boardings_yoy']) })
 
-  const exceptions = detectExceptions(ds, { start: dayOfIso(year.start), end: ds.maxDay, threshold: 0.35, minExpected: 150, modes: ['bus'], entityIds: [route.id] })
+  const exceptions = detectExceptions(ds, { start: Math.min(dayOfIso(window.start), dayOfIso(year.start)), end: dayOfIso(window.end), threshold: 0.35, minExpected: 150, modes: ['bus'], entityIds: [route.id] })
 
   return (
     <div className="flex flex-col gap-8">

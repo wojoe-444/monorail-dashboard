@@ -82,3 +82,9 @@ export function formatCategory(v: CellValue): string {
   if (v === 'false') return 'No'
   return String(v)
 }
+
+/** n / d when both are known and d is positive. Zero over a positive base is 0, not unknown. */
+export function ratioOf(n: number | null | undefined, d: number | null | undefined): number | null {
+  if (n === null || n === undefined || d === null || d === undefined || !Number.isFinite(n) || !(d > 0)) return null
+  return n / d
+}

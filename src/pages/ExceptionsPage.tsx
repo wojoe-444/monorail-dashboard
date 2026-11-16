@@ -58,7 +58,7 @@ export function ExceptionsPage() {
   const shortfall = episodes.reduce((a, e) => a + Math.min(0, e.impact), 0)
   const surplus = episodes.reduce((a, e) => a + Math.max(0, e.impact), 0)
   const ongoing = episodes.filter((e) => e.ongoing).length
-  const entityDays = episodes.reduce((a, e) => a + e.days, 0)
+  const entityDays = episodes.reduce((a, e) => a + e.windowDays, 0)
 
   const columns: SortColumn<Episode>[] = [
     { key: 'kind', label: 'Type', sort: (e) => e.kind, render: (e) => <Badge variant={KIND_VARIANT[e.kind]}>{KIND_LABEL[e.kind]}</Badge> },
@@ -82,21 +82,22 @@ export function ExceptionsPage() {
       sort: (e) => e.start,
       render: (e) => (
         <span className="flex flex-col">
-          <span className="tabular-nums">{e.days === 1 ? formatDay(e.start, true) : `${formatDay(e.start)} – ${formatDay(e.end)}`}</span>
-          <span className="flex flex-wrap gap-1 text-xs text-muted-foreground">
-            {e.days > 1 && <span>{e.days} days</span>}
+          <span className="tabular-nums">{e.days === 1 ? formatDay(e.start, true) : `${formatDay(e.start)} – ${e.ongoing ? 'now' : formatDay(e.end)}`}</span>
+          <span className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+            {e.days > 1 && <span>{e.days.toLocaleString()} days{e.windowDays !== e.days ? `, ${e.windowDays} in period` : ''}</span>}
             {e.ongoing && <Badge variant="warning">Ongoing</Badge>}
             {nearHoliday(e) && <Badge variant="outline">Near a holiday</Badge>}
           </span>
         </span>
       ),
     },
-    { key: 'actual', label: 'Actual', align: 'right', sort: (e) => e.actual, render: (e) => formatValue(e.actual) },
-    { key: 'expected', label: 'Expected', title: 'Median of the same weekday over the previous 8 weeks (Sundays for holidays)', align: 'right', sort: (e) => e.expected, render: (e) => formatValue(Math.round(e.expected)) },
+    { key: 'actual', label: 'Actual', title: 'Riders counted on the flagged days inside the selected period', align: 'right', sort: (e) => e.actual, render: (e) => formatValue(e.actual) },
+    { key: 'expected', label: 'Expected', title: 'Median of the same weekday over the last 8 normal weeks (Sundays for holidays); carried forward through long closures', align: 'right', sort: (e) => e.expected, render: (e) => formatValue(Math.round(e.expected)) },
     { key: 'worst', label: 'Worst day', align: 'right', sort: (e) => (e.worstRatio === null ? null : Math.abs(e.worstRatio)), render: (e) => (e.worstRatio === null ? 'no data' : formatSignedPercent(e.worstRatio)) },
     {
       key: 'impact',
       label: 'Riders vs expected',
+      title: 'Over the flagged days inside the selected period',
       align: 'right',
       sort: (e) => Math.abs(e.impact),
       render: (e) => <span className={e.impact < 0 ? 'text-warning-soft-foreground' : 'text-info-soft-foreground'}>{`${e.impact > 0 ? '+' : '−'}${formatValue(Math.abs(Math.round(e.impact)))}`}</span>,
@@ -131,7 +132,7 @@ export function ExceptionsPage() {
       <PageHeader
         eyebrow="Operations"
         title="Exceptions"
-        description="Stations and routes that ran far off their usual pattern for that weekday: closures, counting outages, events and diversions. Consecutive days merge into one episode."
+        description="Stations and routes that ran far off their usual pattern for that weekday: closures, counting outages, events and diversions. Consecutive days merge into one episode, with its true start even if that was before the period."
         actions={
           <Button variant="outline" onClick={exportRows}>
             <Download />

@@ -17,11 +17,16 @@
  * metrics with an offset window. This engine also allows them over a time range
  * with no metric_time (the offset shifts the range), which is what "this station,
  * last 4 weeks vs the same 4 weeks a year earlier" needs.
+ *
+ * And one deliberate difference: an offset value is null (not a fraction) for a
+ * period whose shifted window starts before the data does. MetricFlow compares
+ * December 2019 with the one day of December 2018-January 2019 that exists and
+ * reports +6,456%; this engine reports no comparison.
  */
 import { evalExpr, identifiers, parseExpr, type ExprNode } from './expr.ts'
 import { parseFilter, type FilterCondition } from './filters.ts'
 import { NULL_DAY, type CatColumn, type Column, type Table } from './table.ts'
-import { dayOfIso, GRAINS, isoOfDay, Truncator, type Grain } from './time.ts'
+import { dayOfIso, GRAINS, isoOfDay, periodEnd, Truncator, truncDay, type Grain } from './time.ts'
 import type {
   CellValue,
   DimensionInfo,
@@ -107,6 +112,24 @@ export class SemanticEngine {
     return this.metrics.has(name)
   }
 
+  /**
+   * Whether values of a metric can be added across groups (stacked, totalled):
+   * sums and counts, and derived sums of those. Ratios, averages, distinct
+   * counts and percentages cannot.
+   */
+  isAdditive(name: string, seen = new Set<string>()): boolean {
+    if (seen.has(name)) return false
+    seen.add(name)
+    const m = this.metric(name)
+    if (m.format === 'percent') return false
+    if (m.type === 'simple') {
+      const agg = m.measure ? this.measures.get(m.measure.name)?.measure.agg : undefined
+      return agg === 'sum' || agg === 'count'
+    }
+    if (m.type === 'derived' && m.expr && /^[ws+]+$/.test(m.expr)) return m.inputs.every((i) => this.isAdditive(i.name, new Set(seen)))
+    return false
+  }
+
   /** Semantic models whose measures a metric reads (walking ratio and derived inputs). */
   modelsOf(metricName: string, seen = new Set<string>()): Set<string> {
     const out = new Set<string>()
@@ -190,8 +213,15 @@ export class SemanticEngine {
     const t0 = performance.now()
     if (!spec.metrics.length) throw new SemanticError('Pick at least one metric')
     const refs = (spec.groupBy ?? []).map((k) => this.parseRef(k))
-    const start = spec.timeRange?.start ? Math.max(dayOfIso(spec.timeRange.start), this.minDay) : this.minDay
-    const end = spec.timeRange?.end ? Math.min(dayOfIso(spec.timeRange.end), this.maxDay) : this.maxDay
+    let start = spec.timeRange?.start ? Math.max(dayOfIso(spec.timeRange.start), this.minDay) : this.minDay
+    let end = spec.timeRange?.end ? Math.min(dayOfIso(spec.timeRange.end), this.maxDay) : this.maxDay
+    // Like MetricFlow, a time range grouped by metric_time widens to whole periods of the coarsest
+    // grain asked for: Aug 15-20 by month means all of August. Callers that want exact days group by day.
+    const coarsest = refs.reduce<Grain | null>((g, r) => (r.kind === 'time' && (!g || GRAINS.indexOf(r.grain) > GRAINS.indexOf(g)) ? r.grain : g), null)
+    if (coarsest && coarsest !== 'day') {
+      start = truncDay(start, coarsest)
+      end = periodEnd(truncDay(end, coarsest), coarsest)
+    }
     const plan: string[] = []
     const memo = new Map<string, Values>()
     const run = { refs, start, end, where: spec.where ?? [], plan, memo }
@@ -204,7 +234,7 @@ export class SemanticEngine {
       ...refs.map((r) => this.refColumn(r)),
       ...spec.metrics.map((name) => {
         const m = this.metric(name)
-        return { key: name, label: m.label, kind: 'metric' as const, format: m.format, description: m.description }
+        return { key: name, label: m.label, kind: 'metric' as const, format: m.format, description: m.description, additive: this.isAdditive(name) }
       }),
     ]
     let rows = [...keys].map((k) => {
@@ -222,7 +252,12 @@ export class SemanticEngine {
         : [{ key: spec.metrics[0], desc: true }]
     rows.sort((a, b) => {
       for (const o of order) {
-        const c = compare(a[o.key], b[o.key])
+        const x = a[o.key]
+        const y = b[o.key]
+        // Nulls sort last in either direction, so a top-N never spends a slot on a row with no value.
+        if (x === null && y !== null) return 1
+        if (y === null && x !== null) return -1
+        const c = compare(x, y)
         if (c) return o.desc ? -c : c
       }
       return 0
@@ -348,7 +383,11 @@ export class SemanticEngine {
     }
 
     const out: Values = new Map()
+    const timeIndex = run.refs.findIndex((r) => r.kind === 'time')
+    // An offset that reaches back before the data would compare against a fragment of a period.
+    const truncated = offset > 0 && timeIndex < 0 && run.start - offset < this.minDay
     for (const [key, g] of groups) {
+      if (truncated) break
       const parts: CellValue[] = []
       let rest = key
       for (let i = 0; i < accessors.length; i++) {
@@ -356,6 +395,7 @@ export class SemanticEngine {
         rest -= code * radix[i]
         parts.push(accessors[i].decode(code))
       }
+      if (offset > 0 && timeIndex >= 0 && (parts[timeIndex] as number) - offset < this.minDay) continue
       const v =
         measure.agg === 'count_distinct' ? g.set!.size : measure.agg === 'count' ? g.n : measure.agg === 'average' ? g.sum / g.n : g.sum
       out.set(parts.length ? JSON.stringify(parts) : '', v)

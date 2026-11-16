@@ -14,10 +14,11 @@ import { ChartCard } from '@/features/semantic/components/ChartCard'
 import { RangeControl } from '@/features/semantic/components/RangeControl'
 import { ResultTable } from '@/features/semantic/components/ResultTable'
 import { dayOfIso, isoOfDay } from '@/features/semantic/core/time.ts'
+import type { QueryResult } from '@/features/semantic/core/types.ts'
 import { useDataset } from '@/features/semantic/data'
-import { formatCompact, formatDay, formatPercent, formatPeriod, formatRange, formatSignedPercent, formatValue } from '@/features/semantic/format'
+import { formatCompact, formatDay, formatPercent, formatPeriod, formatRange, formatSignedPercent, formatValue, ratioOf } from '@/features/semantic/format'
 import { pivotResult } from '@/features/semantic/pivot'
-import { baseline2019, priorYear, recentWeeks, resolveRange } from '@/features/semantic/ranges'
+import { baseline2019, countHolidays, priorYear, recentWeeks, resolveRange } from '@/features/semantic/ranges'
 import { useQueryOrThrow } from '@/features/semantic/useQuery'
 import { useRangeParam } from '@/features/semantic/useRangeParam'
 import type { ViewSpec } from '@/features/semantic/views'
@@ -58,12 +59,20 @@ export function OverviewPage() {
       'rail_share',
     ],
     timeRange: window,
-  }).rows[0]
+  }).rows[0] ?? {}
   const base = baseline2019(window)
-  const kpi2019 = useQueryOrThrow({ metrics: ['total_avg_weekday_rides', 'rail_avg_weekday_entries', 'bus_avg_weekday_boardings'], timeRange: base ?? window }).rows[0]
+  // A total against a window with a different number of holidays (Labor Day in one, not the other) is not a like-for-like change.
+  const holidaysNow = countHolidays(ds.holidays, window)
+  const holidaysLy = countHolidays(ds.holidays, priorYear(window))
+  const holidayMismatch = holidaysNow !== holidaysLy
+  const kpi2019 = useQueryOrThrow({ metrics: ['total_avg_weekday_rides', 'rail_avg_weekday_entries', 'bus_avg_weekday_boardings'], timeRange: base ?? window }).rows[0] ?? {}
   const weekdayLy = (num(kpi.rail_avg_weekday_entries_ly) ?? 0) + (num(kpi.bus_avg_weekday_boardings_ly) ?? 0) || null
   const weekdayNow = num(kpi.total_avg_weekday_rides)
-  const recovery = base && weekdayNow !== null && num(kpi2019.total_avg_weekday_rides) ? weekdayNow / (kpi2019.total_avg_weekday_rides as number) : null
+  const recovery = base ? ratioOf(weekdayNow, num(kpi2019.total_avg_weekday_rides)) : null
+  const ofBaseline = (now: number | null, then: number | null) => {
+    const r = base ? ratioOf(now, then) : null
+    return r === null ? undefined : `· ${formatPercent(r, 0)} of 2019`
+  }
 
   // Weekly sparklines (12 complete weeks ending on the last day).
   const spark = useQueryOrThrow({
@@ -94,6 +103,17 @@ export function OverviewPage() {
       }
     })
   const lastRecovery = recoveryData[recoveryData.length - 1]
+  // The card's table and CSV carry the ratios it draws, not the averages behind them.
+  const recoveryResult: QueryResult = {
+    columns: [
+      { key: 'month', label: 'Month', kind: 'time', grain: 'month' },
+      { key: 'rail_share_of_2019', label: 'Rail, share of same month 2019', kind: 'metric', format: 'percent' },
+      { key: 'bus_share_of_2019', label: 'Bus, share of same month 2019', kind: 'metric', format: 'percent' },
+    ],
+    rows: recoveryData.map((d) => ({ month: d.t, rail_share_of_2019: d.rail, bus_share_of_2019: d.bus })),
+    plan: monthly.plan,
+    ms: monthly.ms,
+  }
 
   // Day types: average daily rides per day type, now vs 52 weeks earlier.
   const dayTypes = useQueryOrThrow({ metrics: ['rail_avg_daily_entries', 'bus_avg_daily_boardings'], groupBy: ['service_day__day_type'], timeRange: window })
@@ -113,7 +133,8 @@ export function OverviewPage() {
   })
   const stationRows = stations.rows.filter((r) => num(r.rail_avg_weekday_entries) !== null)
   const busiest = [...stationRows].sort((a, b) => (b.rail_avg_weekday_entries as number) - (a.rail_avg_weekday_entries as number)).slice(0, 10)
-  const movers = stationRows.filter((r) => (num(r.rail_avg_weekday_entries_ly) ?? 0) >= 1000 && num(r.rail_avg_weekday_yoy) !== null)
+  // Closed stations (zero entries now) are not demand changes: they are listed on Exceptions instead.
+  const movers = stationRows.filter((r) => (num(r.rail_avg_weekday_entries_ly) ?? 0) >= 1000 && num(r.rail_avg_weekday_yoy) !== null && (num(r.rail_avg_weekday_entries) ?? 0) > 0)
   const gainers = [...movers].sort((a, b) => (b.rail_avg_weekday_yoy as number) - (a.rail_avg_weekday_yoy as number)).slice(0, 5)
   const decliners = [...movers].sort((a, b) => (a.rail_avg_weekday_yoy as number) - (b.rail_avg_weekday_yoy as number)).slice(0, 5)
 
@@ -160,7 +181,7 @@ export function OverviewPage() {
           value={formatCompact(num(kpi.rail_avg_weekday_entries))}
           delta={ratioDelta(num(kpi.rail_avg_weekday_entries), num(kpi.rail_avg_weekday_entries_ly))}
           deltaLabel="vs 52 wks"
-          hint={base && num(kpi2019.rail_avg_weekday_entries) && num(kpi.rail_avg_weekday_entries) ? `· ${formatPercent((kpi.rail_avg_weekday_entries as number) / (kpi2019.rail_avg_weekday_entries as number), 0)} of 2019` : undefined}
+          hint={ofBaseline(num(kpi.rail_avg_weekday_entries), num(kpi2019.rail_avg_weekday_entries))}
           trend={<Sparkline data={sparkOf('rail_avg_weekday_entries')} className="text-muted-foreground" />}
         />
         <StatTile
@@ -168,15 +189,21 @@ export function OverviewPage() {
           value={formatCompact(num(kpi.bus_avg_weekday_boardings))}
           delta={ratioDelta(num(kpi.bus_avg_weekday_boardings), num(kpi.bus_avg_weekday_boardings_ly))}
           deltaLabel="vs 52 wks"
-          hint={base && num(kpi2019.bus_avg_weekday_boardings) && num(kpi.bus_avg_weekday_boardings) ? `· ${formatPercent((kpi.bus_avg_weekday_boardings as number) / (kpi2019.bus_avg_weekday_boardings as number), 0)} of 2019` : undefined}
+          hint={ofBaseline(num(kpi.bus_avg_weekday_boardings), num(kpi2019.bus_avg_weekday_boardings))}
           trend={<Sparkline data={sparkOf('bus_avg_weekday_boardings')} className="text-muted-foreground" />}
         />
         <StatTile
           label="Total rides in period"
           value={formatCompact(num(kpi.total_rides))}
-          delta={num(kpi.total_rides_yoy) ?? undefined}
+          delta={holidayMismatch ? undefined : (num(kpi.total_rides_yoy) ?? undefined)}
           deltaLabel="vs 52 wks"
-          hint={num(kpi.rail_share) !== null ? `· rail ${formatPercent(kpi.rail_share as number, 0)}` : undefined}
+          hint={
+            holidayMismatch
+              ? `Not compared: ${holidaysNow} holiday${holidaysNow === 1 ? '' : 's'} now vs ${holidaysLy} 52 weeks earlier`
+              : num(kpi.rail_share) !== null
+                ? `· rail ${formatPercent(kpi.rail_share as number, 0)}`
+                : undefined
+          }
           trend={<Sparkline data={sparkOf('total_rides')} className="text-muted-foreground" />}
         />
       </div>
@@ -281,7 +308,7 @@ export function OverviewPage() {
         <Card className="gap-4">
           <CardHeader>
             <CardTitle>Biggest movers</CardTitle>
-            <CardDescription>Weekday entries vs 52 weeks earlier, stations with 1,000+ a year ago.</CardDescription>
+            <CardDescription>Weekday entries vs 52 weeks earlier, stations with 1,000+ a year ago. Closed stations are on Exceptions.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <MoverList title="Up" rows={gainers} />
@@ -292,7 +319,7 @@ export function OverviewPage() {
         <Card className="gap-4">
           <CardHeader>
             <CardTitle>Lines</CardTitle>
-            <CardDescription>Average weekday entries, split evenly at transfer stations.</CardDescription>
+            <CardDescription>Average weekday entries, split across the all-day lines at transfer stations.</CardDescription>
             <CardAction>
               <Button variant="ghost" size="sm" onClick={() => navigate('/lines')}>
                 All lines
@@ -332,8 +359,7 @@ export function OverviewPage() {
           className="xl:col-span-2"
           title="Recovery vs 2019"
           description={`Average weekday ridership as a share of the same month in 2019.${lastRecovery ? ` ${formatPeriod(lastRecovery.t, 'month')}: rail ${lastRecovery.rail ? formatPercent(lastRecovery.rail, 0) : '—'}, bus ${lastRecovery.bus ? formatPercent(lastRecovery.bus, 0) : '—'}.` : ''}`}
-          view={{ metrics: ['rail_avg_weekday_entries', 'bus_avg_weekday_boardings'], groupBy: ['metric_time__month'], where: [], range: 'all', chart: 'line' }}
-          result={monthly}
+          result={recoveryResult}
         >
           <TimeSeriesChart
             data={recoveryData}
@@ -374,7 +400,7 @@ export function OverviewPage() {
                     >
                       <span className="block truncate text-sm font-medium">{e.entityName}</span>
                       <span className="block text-xs text-muted-foreground">
-                        {e.mode === 'rail' ? 'Rail' : 'Bus'} · {e.days === 1 ? formatDay(e.start, true) : `${e.days} days from ${formatDay(e.start)}`}
+                        {e.mode === 'rail' ? 'Rail' : 'Bus'} · {e.days === 1 ? formatDay(e.start, true) : `${e.ongoing ? 'since' : 'from'} ${formatDay(e.start)} (${e.days.toLocaleString()} days)`}
                       </span>
                     </a>
                     <span className="flex shrink-0 flex-col items-end gap-1">

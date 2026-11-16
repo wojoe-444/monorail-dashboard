@@ -32,7 +32,7 @@ const TABLES = {
     in_stops_list: 'bool', first_ride_date: 'date', last_ride_date: 'date',
   },
   dim_lines: { line_id: 'string', line_name: 'string', color_hex: 'string', sort_order: 'int', station_count: 'int' },
-  bridge_station_lines: { station_id: 'string', line_id: 'string', line_count: 'int' },
+  bridge_station_lines: { station_id: 'string', line_id: 'string', line_count: 'int', allocation_weight: 'double' },
   dim_bus_routes: {
     route_id: 'string', route_name: 'string', route_type: 'string', in_routes_list: 'bool', first_ride_date: 'date', last_ride_date: 'date',
   },
@@ -118,6 +118,8 @@ function encodeColumn(type, raw) {
     return { type, delta }
   }
   if (type === 'int') return { type, data: raw.map((v) => (v === '' ? null : Number.parseInt(v, 10))) }
+  // 'double' keeps full precision (weights like 1/3 must match the warehouse exactly); 'float' rounds to 6 places.
+  if (type === 'double') return { type: 'float', data: raw.map((v) => (v === '' ? null : Number.parseFloat(v))) }
   return { type, data: raw.map((v) => (v === '' ? null : Math.round(Number.parseFloat(v) * 1e6) / 1e6)) }
 }
 
@@ -202,9 +204,19 @@ function compileManifest(sm, savedQueryMeta = {}) {
       metrics: q.query_params.metrics,
       groupBy: q.query_params.group_by.map(groupByItem),
       where: filterOf(q.query_params.where),
+      orderBy: (q.query_params.order_by ?? []).map(orderItem),
+      limit: q.query_params.limit ?? undefined,
       meta: savedQueryMeta[q.name] ?? {},
     })),
   }
+}
+
+/** "Metric('x').descending(True)" -> { key: 'x', desc: true }; group-by items keep their query-spec key. */
+function orderItem(s) {
+  const desc = /\.descending\(\s*True\s*\)/i.test(s)
+  const item = s.replace(/\.descending\([^)]*\)/i, '').trim()
+  const metric = item.match(/^Metric\('([^']+)'\)$/)
+  return { key: metric ? metric[1] : groupByItem(item), desc }
 }
 
 function windowDays(w) {
