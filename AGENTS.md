@@ -129,6 +129,8 @@ Most apps are one dashboard, and that stays the default: with one entry in `src/
 - **Data pages are wrapped in `withData`** in `src/dashboards/cta/index.ts`. Inside them, `useDataset()` gives the engine plus typed stations, lines, routes and day types.
 - **Pages live in `src/dashboards/cta/pages/`**; shared transit code in `src/features/transit/` (also used by the accessibility dashboard).
 - **Charts sit in `ChartCard`** (`src/features/semantic/components/ChartCard.tsx`). Pass `view` (a `ViewSpec`) and `result`, and the card gets a table view, CSV, Open in Explore, Pin to board and Copy as mf query.
+  - Every chart, table and list card uses it, including cards without a query: pass `csv={() => ...}` (`sortTableCsv` for a `SortTable`, `csvFromRecords` from `@/lib/download` for anything else). Every card gets Full screen (fills the page body; Esc exits) and Download PNG. Stat tiles stay plain.
+  - New chart components read their height through `useChartHeight(height)` (`src/components/charts/frame.ts`) so they grow in full screen. Mark anything that shouldn't appear in a PNG with `data-export-ignore`.
 - **Page state goes in the URL** via `useRangeParam` / `useUrlParams`. Date ranges are presets relative to the last day with data (`src/features/semantic/ranges.ts`).
 - **Line colors** (Red Line red, and so on) are the one exception to "tokens only". They are official CTA wayfinding colors, stored as data in the dbt seed `semantic/seeds/lines.csv` and drawn only through `LineSwatch` / `LineChip` or as a line's chart series color. Text never takes a line color.
 - **After editing `semantic/`**, run `npm run data:build` and `npm run semantic:parity`. Add a parity query when you add a new kind of metric.

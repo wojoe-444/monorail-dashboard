@@ -1,5 +1,7 @@
 import type { CatColumn, NumColumn, Table } from '@/features/semantic/core/table.ts'
+import { isoOfDay } from '@/features/semantic/core/time.ts'
 import type { Dataset } from '@/features/semantic/data'
+import { csvFromRecords, type CsvData } from '@/lib/download'
 
 /**
  * Exception detection: days a station or bus route ran far off its normal
@@ -128,7 +130,13 @@ export function detectExceptions(ds: Dataset, opts: DetectOptions): Episode[] {
   const to = Math.min(opts.end, ds.maxDay)
   const episodes: Episode[] = []
 
-  const run = (mode: Mode, table: Table, idCol: string, nameOf: (id: string) => string, span: (id: string) => { first: number | null; last: number | null }) => {
+  const run = (
+    mode: Mode,
+    table: Table,
+    idCol: string,
+    nameOf: (id: string) => string,
+    span: (id: string) => { first: number | null; last: number | null },
+  ) => {
     const only = opts.entityIds ? new Set(opts.entityIds) : null
     for (const [id, s] of matrix(table, idCol, from, to)) {
       if (only && !only.has(id)) continue
@@ -277,4 +285,22 @@ export const KIND_VARIANT: Record<ExceptionKind, 'destructive' | 'warning' | 'in
   missing: 'secondary',
   drop: 'warning',
   surge: 'info',
+}
+
+/** Episodes as CSV rows (raw values; dates as ISO). */
+export function episodesCsv(episodes: Episode[]): CsvData {
+  return csvFromRecords(episodes, [
+    { label: 'type', value: (e) => e.kind },
+    { label: 'mode', value: (e) => e.mode },
+    { label: 'id', value: (e) => e.entityId },
+    { label: 'name', value: (e) => e.entityName },
+    { label: 'start', value: (e) => isoOfDay(e.start) },
+    { label: 'end', value: (e) => isoOfDay(e.end) },
+    { label: 'days', value: (e) => e.days },
+    { label: 'actual', value: (e) => e.actual },
+    { label: 'expected', value: (e) => Math.round(e.expected) },
+    { label: 'worst_ratio', value: (e) => e.worstRatio },
+    { label: 'impact', value: (e) => Math.round(e.impact) },
+    { label: 'ongoing', value: (e) => e.ongoing },
+  ])
 }

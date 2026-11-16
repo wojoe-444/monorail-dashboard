@@ -7,7 +7,6 @@ import { StatTile } from '@/components/charts/StatTile'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Segmented } from '@/components/ui/segmented'
@@ -15,9 +14,9 @@ import { ChartCard } from '@/features/semantic/components/ChartCard'
 import { RangeControl } from '@/features/semantic/components/RangeControl'
 import { ResultChart } from '@/features/semantic/components/ResultChart'
 import type { QueryResult } from '@/features/semantic/core/types.ts'
-import { downloadCsv } from '@/features/semantic/csv'
+import { downloadCsv, resultCsvData } from '@/features/semantic/csv'
 import { useDataset, type Route } from '@/features/semantic/data'
-import { formatCompact, formatPercent, formatValue } from '@/features/semantic/format'
+import { formatCompact, formatPercent, formatValue, formatRange } from '@/features/semantic/format'
 import { baseline2019, countDayType, recentWeeks, weekStarts } from '@/features/semantic/ranges'
 import { useQueryOrThrow } from '@/features/semantic/useQuery'
 import { useRangeParam } from '@/features/semantic/useRangeParam'
@@ -49,7 +48,13 @@ export function BusRoutesPage() {
   const q = params.get('q') ?? ''
 
   const current = useQueryOrThrow({
-    metrics: ['bus_avg_weekday_boardings', 'bus_avg_weekday_yoy', 'bus_avg_saturday_boardings', 'bus_avg_sunday_boardings', 'bus_boardings'],
+    metrics: [
+      'bus_avg_weekday_boardings',
+      'bus_avg_weekday_yoy',
+      'bus_avg_saturday_boardings',
+      'bus_avg_sunday_boardings',
+      'bus_boardings',
+    ],
     groupBy: ['route'],
     timeRange: window,
   })
@@ -59,7 +64,12 @@ export function BusRoutesPage() {
   // Totals across routes divide weekday boardings by the system's weekdays, not by each route's
   // reporting days, so a route that ran only on event days does not count as a full-time route.
   const weekdayBoardings = new Map(
-    useQueryOrThrow({ metrics: ['bus_boardings'], groupBy: ['route'], where: ["{{ Dimension('service_day__day_type') }} = 'Weekday'"], timeRange: window }).rows.map((r) => [String(r.route), num(r.bus_boardings) ?? 0]),
+    useQueryOrThrow({
+      metrics: ['bus_boardings'],
+      groupBy: ['route'],
+      where: ["{{ Dimension('service_day__day_type') }} = 'Weekday'"],
+      timeRange: window,
+    }).rows.map((r) => [String(r.route), num(r.bus_boardings) ?? 0]),
   )
   const systemWeekdays = countDayType(ds.dayType, window, 'Weekday')
 
@@ -94,11 +104,28 @@ export function BusRoutesPage() {
       }
     })
   const needle = q.trim().toLowerCase()
-  const rows = allRows.filter((r) => (type === 'all' || r.route.type === type) && (!needle || r.route.id.toLowerCase() === needle || r.route.name.toLowerCase().includes(needle) || r.route.id.toLowerCase().startsWith(needle)))
+  const rows = allRows.filter(
+    (r) =>
+      (type === 'all' || r.route.type === type) &&
+      (!needle ||
+        r.route.id.toLowerCase() === needle ||
+        r.route.name.toLowerCase().includes(needle) ||
+        r.route.id.toLowerCase().startsWith(needle)),
+  )
 
   const typeWhere = type === 'all' ? [] : [`{{ Dimension('route__route_type') }} = '${type}'`]
-  const typeView: ViewSpec = { metrics: ['bus_avg_weekday_boardings'], groupBy: ['metric_time__month', 'route__route_type'], where: [], range: '3y', chart: 'line' }
-  const byType = useQueryOrThrow({ metrics: typeView.metrics, groupBy: typeView.groupBy, timeRange: { start: baseline3y(ds.maxIso), end: ds.maxIso } })
+  const typeView: ViewSpec = {
+    metrics: ['bus_avg_weekday_boardings'],
+    groupBy: ['metric_time__month', 'route__route_type'],
+    where: [],
+    range: '3y',
+    chart: 'line',
+  }
+  const byType = useQueryOrThrow({
+    metrics: typeView.metrics,
+    groupBy: typeView.groupBy,
+    timeRange: { start: baseline3y(ds.maxIso), end: ds.maxIso },
+  })
 
   const columns: SortColumn<Row>[] = [
     {
@@ -106,25 +133,53 @@ export function BusRoutesPage() {
       label: 'Route',
       sort: (r) => r.route.id,
       render: (r) => (
-        <a href={dashHref(`/bus/route?id=${encodeURIComponent(r.route.id)}`)} className="flex min-w-0 items-center gap-3 rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+        <a
+          href={dashHref(`/bus/route?id=${encodeURIComponent(r.route.id)}`)}
+          className="flex min-w-0 items-center gap-3 rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+        >
           <span className="w-12 shrink-0 font-mono text-sm font-semibold">{r.route.id}</span>
           <span className="truncate">{r.route.name}</span>
         </a>
       ),
     },
-    { key: 'type', label: 'Type', sort: (r) => r.route.type, render: (r) => <Badge variant={TYPE_VARIANT[r.route.type] ?? 'secondary'}>{r.route.type}</Badge> },
+    {
+      key: 'type',
+      label: 'Type',
+      sort: (r) => r.route.type,
+      render: (r) => <Badge variant={TYPE_VARIANT[r.route.type] ?? 'secondary'}>{r.route.type}</Badge>,
+    },
     { key: 'weekday', label: 'Avg weekday', align: 'right', sort: (r) => r.weekday, render: (r) => formatValue(r.weekday) },
     { key: 'yoy', label: 'vs 52 wks', align: 'right', sort: (r) => r.yoy, render: (r) => <Delta v={r.yoy} /> },
     { key: 'recovery', label: 'of 2019', align: 'right', sort: (r) => r.recovery, render: (r) => <ShareOf v={r.recovery} /> },
     { key: 'sat', label: 'Avg Sat', align: 'right', sort: (r) => r.saturday, render: (r) => formatValue(r.saturday) },
     { key: 'sun', label: 'Avg Sun/hol', align: 'right', sort: (r) => r.sunday, render: (r) => formatValue(r.sunday) },
-    { key: 'share', label: 'Share', align: 'right', sort: (r) => r.share, render: (r) => (r.share !== null ? formatPercent(r.share, 1) : '—') },
-    { key: 'trend', label: '12 weeks', render: (r) => <Sparkline data={r.trend} className={(r.yoy ?? 0) >= 0 ? 'text-primary' : 'text-muted-foreground'} /> },
+    {
+      key: 'share',
+      label: 'Share',
+      align: 'right',
+      sort: (r) => r.share,
+      render: (r) => (r.share !== null ? formatPercent(r.share, 1) : '—'),
+    },
+    {
+      key: 'trend',
+      label: '12 weeks',
+      render: (r) => <Sparkline data={r.trend} className={(r.yoy ?? 0) >= 0 ? 'text-primary' : 'text-muted-foreground'} />,
+    },
   ]
 
-  const exportRows = () => {
+  const tableResult = () => {
     const result: QueryResult = {
-      columns: ['route_id', 'route_name', 'route_type', 'avg_weekday', 'avg_weekday_yoy', 'share_of_2019', 'avg_saturday', 'avg_sunday_holiday', 'boardings'].map((k) => ({ key: k, label: k, kind: 'metric' as const })),
+      columns: [
+        'route_id',
+        'route_name',
+        'route_type',
+        'avg_weekday',
+        'avg_weekday_yoy',
+        'share_of_2019',
+        'avg_saturday',
+        'avg_sunday_holiday',
+        'boardings',
+      ].map((k) => ({ key: k, label: k, kind: 'metric' as const })),
       rows: rows.map((r) => ({
         route_id: r.route.id,
         route_name: r.route.name,
@@ -139,13 +194,20 @@ export function BusRoutesPage() {
       plan: [],
       ms: 0,
     }
-    downloadCsv(result, `bus routes ${window.start} to ${window.end}`)
+    return result
   }
+  const exportName = `bus routes ${window.start} to ${window.end}`
+  const exportRows = () => downloadCsv(tableResult(), exportName)
 
   const shownWeekdayBoardings = rows.map((r) => weekdayBoardings.get(r.route.id) ?? 0)
   const weekdaySum = shownWeekdayBoardings.reduce((a, b) => a + b, 0)
   const weekdayTotal = systemWeekdays ? weekdaySum / systemWeekdays : null
-  const top10Share = weekdaySum ? [...shownWeekdayBoardings].sort((a, b) => b - a).slice(0, 10).reduce((a, b) => a + b, 0) / weekdaySum : null
+  const top10Share = weekdaySum
+    ? [...shownWeekdayBoardings]
+        .sort((a, b) => b - a)
+        .slice(0, 10)
+        .reduce((a, b) => a + b, 0) / weekdaySum
+    : null
   const growing = rows.filter((r) => (r.yoy ?? 0) > 0).length
   const withYoy = rows.filter((r) => r.yoy !== null).length
 
@@ -185,27 +247,66 @@ export function BusRoutesPage() {
           </Label>
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input id={`${id}-q`} value={q} onChange={(e) => setParams({ q: e.target.value })} placeholder="Route number or name" className="pl-8" />
+            <Input
+              id={`${id}-q`}
+              value={q}
+              onChange={(e) => setParams({ q: e.target.value })}
+              placeholder="Route number or name"
+              className="pl-8"
+            />
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Routes" value={String(rows.length)} hint={rows.length !== allRows.length ? `of ${allRows.length}` : 'reporting in period'} />
-        <StatTile label="Avg weekday boardings" value={formatCompact(weekdayTotal)} hint={`routes shown, per weekday (${systemWeekdays} in period)`} />
-        <StatTile label="Top 10 routes carry" value={top10Share !== null ? formatPercent(top10Share, 0) : '—'} hint="of weekday boardings shown" />
-        <StatTile label="Growing vs 52 wks" value={withYoy ? `${growing} of ${withYoy}` : '—'} hint={withYoy ? formatPercent(growing / withYoy, 0) : undefined} />
+        <StatTile
+          label="Routes"
+          value={String(rows.length)}
+          hint={rows.length !== allRows.length ? `of ${allRows.length}` : 'reporting in period'}
+        />
+        <StatTile
+          label="Avg weekday boardings"
+          value={formatCompact(weekdayTotal)}
+          hint={`routes shown, per weekday (${systemWeekdays} in period)`}
+        />
+        <StatTile
+          label="Top 10 routes carry"
+          value={top10Share !== null ? formatPercent(top10Share, 0) : '—'}
+          hint="of weekday boardings shown"
+        />
+        <StatTile
+          label="Growing vs 52 wks"
+          value={withYoy ? `${growing} of ${withYoy}` : '—'}
+          hint={withYoy ? formatPercent(growing / withYoy, 0) : undefined}
+        />
       </div>
 
-      <ChartCard title="Weekday boardings by route type, last 3 years" description="Average weekday boardings per month. Shuttles replace rail during closures." view={{ ...typeView, where: typeWhere }} result={byType}>
+      <ChartCard
+        title="Weekday boardings by route type, last 3 years"
+        description="Average weekday boardings per month. Shuttles replace rail during closures."
+        view={{ ...typeView, where: typeWhere }}
+        result={byType}
+      >
         <ResultChart result={byType} chart="line" title="Average weekday boardings by route type" height={240} />
       </ChartCard>
 
-      <Card className="py-2">
-        <CardContent className="px-2">
-          <SortTable rows={rows} columns={columns} rowKey={(r) => r.route.id} initialSort={{ key: 'weekday', desc: true }} caption="Bus routes" stickyFirst pageSize={60} />
-        </CardContent>
-      </Card>
+      <ChartCard
+        title="Routes"
+        description={<>{formatRange(window.start, window.end)}. CSV has every row, not just the first page.</>}
+        csv={() => resultCsvData(tableResult())}
+        exportName={exportName}
+        contentClassName="px-2"
+      >
+        <SortTable
+          rows={rows}
+          columns={columns}
+          rowKey={(r) => r.route.id}
+          initialSort={{ key: 'weekday', desc: true }}
+          caption="Bus routes"
+          stickyFirst
+          pageSize={60}
+        />
+      </ChartCard>
     </div>
   )
 }

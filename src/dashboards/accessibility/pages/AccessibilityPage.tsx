@@ -2,10 +2,10 @@ import { ArrowUpRight } from 'lucide-react'
 
 import { pathIn } from '@/app/hub'
 import { RankedBars } from '@/components/charts/RankedBars'
-import { SortTable, type SortColumn } from '@/components/charts/SortTable'
+import { SortTable, sortTableCsv, type SortColumn } from '@/components/charts/SortTable'
 import { StatTile } from '@/components/charts/StatTile'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ChartCard } from '@/features/semantic/components/ChartCard'
 import { RangeControl } from '@/features/semantic/components/RangeControl'
 import { ViewCard } from '@/features/semantic/components/ViewCard'
 import { useDataset, type Station } from '@/features/semantic/data'
@@ -16,6 +16,7 @@ import { useRangeParam } from '@/features/semantic/useRangeParam'
 import { specFromSavedQuery } from '@/features/semantic/views'
 import { Delta } from '@/features/transit/Delta'
 import { LineDots, LineSwatch } from '@/features/transit/LineChip'
+import { csvFromRecords } from '@/lib/download'
 import { href } from '@/lib/router'
 
 interface Row {
@@ -36,24 +37,38 @@ export function AccessibilityPage() {
   const { engine } = ds
   const { preset, custom, window, setRange } = useRangeParam('28d', ['28d', '90d', '6m', '1y', 'ytd'])
 
-  const byAda = useQueryOrThrow({ metrics: ['rail_entries', 'rail_avg_weekday_entries'], groupBy: ['station__ada_accessible'], timeRange: window }).rows
+  const byAda = useQueryOrThrow({
+    metrics: ['rail_entries', 'rail_avg_weekday_entries'],
+    groupBy: ['station__ada_accessible'],
+    timeRange: window,
+  }).rows
   const entriesAt = (flag: string) => num(byAda.find((r) => r.station__ada_accessible === flag)?.rail_entries)
   const accessibleShare = ratioOf(entriesAt('true'), (entriesAt('true') ?? 0) + (entriesAt('false') ?? 0))
 
-  const stations = useQueryOrThrow({ metrics: ['rail_avg_weekday_entries', 'rail_avg_weekday_yoy'], groupBy: ['station'], timeRange: window }).rows
+  const stations = useQueryOrThrow({
+    metrics: ['rail_avg_weekday_entries', 'rail_avg_weekday_yoy'],
+    groupBy: ['station'],
+    timeRange: window,
+  }).rows
   const byStation = new Map(stations.map((r) => [String(r.station), r]))
   const located = ds.stations.filter((s) => s.lines.length > 0)
   const accessible = located.filter((s) => s.ada)
   const rows: Row[] = located
     .filter((s) => !s.ada)
-    .map((s) => ({ station: s, weekday: num(byStation.get(s.id)?.rail_avg_weekday_entries), yoy: num(byStation.get(s.id)?.rail_avg_weekday_yoy) }))
+    .map((s) => ({
+      station: s,
+      weekday: num(byStation.get(s.id)?.rail_avg_weekday_entries),
+      yoy: num(byStation.get(s.id)?.rail_avg_weekday_yoy),
+    }))
     .filter((r) => (r.weekday ?? 0) > 0)
   // Weekday entries over the system's weekdays (not a sum of per-station averages with different day counts).
   const weekdayEntries = new Map(
-    useQueryOrThrow({ metrics: ['rail_entries'], groupBy: ['station'], where: ["{{ Dimension('service_day__day_type') }} = 'Weekday'"], timeRange: window }).rows.map((r) => [
-      String(r.station),
-      num(r.rail_entries) ?? 0,
-    ]),
+    useQueryOrThrow({
+      metrics: ['rail_entries'],
+      groupBy: ['station'],
+      where: ["{{ Dimension('service_day__day_type') }} = 'Weekday'"],
+      timeRange: window,
+    }).rows.map((r) => [String(r.station), num(r.rail_entries) ?? 0]),
   )
   const weekdays = countDayType(ds.dayType, window, 'Weekday')
   const notAccessibleEntries = rows.reduce((a, r) => a + (weekdayEntries.get(r.station.id) ?? 0), 0)
@@ -89,6 +104,12 @@ export function AccessibilityPage() {
     },
   ]
 
+  const byLine = ds.lines.map((line) => {
+    const on = located.filter((s) => s.lines.includes(line.name))
+    const accessible = on.filter((s) => s.ada).length
+    return { line, stations: on.length, accessible, share: on.length ? accessible / on.length : 0 }
+  })
+
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
@@ -100,10 +121,27 @@ export function AccessibilityPage() {
       <RangeControl value={preset} custom={custom} onChange={setRange} presets={['28d', '90d', '6m', '1y', 'ytd']} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile hero label="Entries at accessible stations" value={accessibleShare !== null ? formatPercent(accessibleShare, 0) : '—'} hint="of all rail entries in the period" />
-        <StatTile label="Accessible stations" value={`${accessible.length} of ${located.length}`} hint={formatPercent(accessible.length / Math.max(1, located.length), 0)} />
-        <StatTile label="Weekday entries, not accessible" value={formatCompact(notAccessibleWeekday)} hint={`per weekday (${weekdays} in period)`} />
-        <StatTile label="Stations to prioritize" value={String(rows.filter((r) => (r.weekday ?? 0) >= 2000).length)} hint="not accessible, 2,000+ weekday entries" />
+        <StatTile
+          hero
+          label="Entries at accessible stations"
+          value={accessibleShare !== null ? formatPercent(accessibleShare, 0) : '—'}
+          hint="of all rail entries in the period"
+        />
+        <StatTile
+          label="Accessible stations"
+          value={`${accessible.length} of ${located.length}`}
+          hint={formatPercent(accessible.length / Math.max(1, located.length), 0)}
+        />
+        <StatTile
+          label="Weekday entries, not accessible"
+          value={formatCompact(notAccessibleWeekday)}
+          hint={`per weekday (${weekdays} in period)`}
+        />
+        <StatTile
+          label="Stations to prioritize"
+          value={String(rows.filter((r) => (r.weekday ?? 0) >= 2000).length)}
+          hint="not accessible, 2,000+ weekday entries"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
@@ -116,43 +154,52 @@ export function AccessibilityPage() {
             height={260}
           />
         )}
-        <Card className="gap-4">
-          <CardHeader>
-            <CardTitle>Accessible stations by line</CardTitle>
-            <CardDescription>Share of each line's stations flagged accessible on every platform.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RankedBars
-              items={ds.lines.map((l) => {
-                const on = located.filter((s) => s.lines.includes(l.name))
-                const share = on.length ? on.filter((s) => s.ada).length / on.length : 0
-                return {
-                  key: l.id,
-                  label: (
-                    <span className="flex items-center gap-2">
-                      <LineSwatch line={l} />
-                      {l.name}
-                    </span>
-                  ),
-                  name: l.name,
-                  value: share,
-                  display: formatPercent(share, 0),
-                }
-              })}
-            />
-          </CardContent>
-        </Card>
+        <ChartCard
+          title="Accessible stations by line"
+          description="Share of each line's stations flagged accessible on every platform."
+          csv={() =>
+            csvFromRecords(byLine, [
+              { label: 'line', value: (x) => x.line.name },
+              { label: 'stations', value: (x) => x.stations },
+              { label: 'accessible', value: (x) => x.accessible },
+              { label: 'share_accessible', value: (x) => x.share },
+            ])
+          }
+        >
+          <RankedBars
+            items={byLine.map(({ line: l, share }) => {
+              return {
+                key: l.id,
+                label: (
+                  <span className="flex items-center gap-2">
+                    <LineSwatch line={l} />
+                    {l.name}
+                  </span>
+                ),
+                name: l.name,
+                value: share,
+                display: formatPercent(share, 0),
+              }
+            })}
+          />
+        </ChartCard>
       </div>
 
-      <Card className="gap-2">
-        <CardHeader>
-          <CardTitle>Busiest stations without step-free access</CardTitle>
-          <CardDescription>Ranked by average weekday entries. Station names open the CTA ridership dashboard.</CardDescription>
-        </CardHeader>
-        <CardContent className="px-2">
-          <SortTable rows={rows} columns={columns} rowKey={(r) => r.station.id} initialSort={{ key: 'weekday', desc: true }} caption="Stations without step-free access" pageSize={25} />
-        </CardContent>
-      </Card>
+      <ChartCard
+        title="Busiest stations without step-free access"
+        description="Ranked by average weekday entries. Station names open the CTA ridership dashboard."
+        csv={() => sortTableCsv(rows, columns)}
+        contentClassName="px-2"
+      >
+        <SortTable
+          rows={rows}
+          columns={columns}
+          rowKey={(r) => r.station.id}
+          initialSort={{ key: 'weekday', desc: true }}
+          caption="Stations without step-free access"
+          pageSize={25}
+        />
+      </ChartCard>
     </div>
   )
 }

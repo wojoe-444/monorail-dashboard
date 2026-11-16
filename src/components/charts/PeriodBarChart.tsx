@@ -1,6 +1,7 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 import { ChartTooltipContent } from './ChartTooltip'
+import { useChartHeight } from './frame'
 import { Legend } from './Legend'
 import { axisProps, gridProps } from './palette'
 
@@ -37,9 +38,10 @@ export function PeriodBarChart({
   formatTitle,
   formatValue,
   formatAxis,
-  height = 260,
+  height: ownHeight = 260,
   ariaLabel,
 }: PeriodBarChartProps) {
+  const height = useChartHeight(ownHeight, series.length > 1 ? 40 : 0)
   return (
     <div className="flex flex-col gap-3">
       {series.length > 1 && <Legend items={series} shape="rect" />}
@@ -62,7 +64,13 @@ export function PeriodBarChart({
                   value: row?.[s.key] === null || row?.[s.key] === undefined ? '—' : formatValue(row[s.key] as number),
                 }))
                 const total = stacked ? series.reduce((a, s) => a + ((row?.[s.key] as number) ?? 0), 0) : null
-                return <ChartTooltipContent title={formatTitle(String(label))} rows={stacked ? rows.reverse() : rows} footer={total !== null ? `Total ${formatValue(total)}` : undefined} />
+                return (
+                  <ChartTooltipContent
+                    title={formatTitle(String(label))}
+                    rows={stacked ? rows.reverse() : rows}
+                    footer={total !== null ? `Total ${formatValue(total)}` : undefined}
+                  />
+                )
               }}
             />
             {series.map((s, i) => (
