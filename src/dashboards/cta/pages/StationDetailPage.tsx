@@ -23,7 +23,7 @@ import { exploreHref, type ViewSpec } from '@/features/semantic/views'
 import { Delta } from '@/features/transit/Delta'
 import { detectExceptions, KIND_LABEL, KIND_VARIANT } from '@/features/transit/exceptions'
 import { LineChip } from '@/features/transit/LineChip'
-import { href, navigate } from '@/lib/router'
+import { dashHref, dashNavigate } from '@/app/hub'
 
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 const DOW = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -43,7 +43,7 @@ export function StationDetailPage() {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader title="Station not found" description={id ? `No station with id ${id} in the data.` : 'No station selected.'} />
-        <Button variant="outline" className="w-fit" onClick={() => navigate('/rail')}>
+        <Button variant="outline" className="w-fit" onClick={() => dashNavigate('/rail')}>
           <ArrowLeft />
           All stations
         </Button>
@@ -129,13 +129,13 @@ function StationDetail({ stationId }: { stationId: string }) {
         description={`${station.sector} sector · ${station.lines.length ? `${station.lines.join(', ')} line${station.lines.length > 1 ? 's' : ''}` : 'no line data'} · ${station.ada ? 'ADA accessible' : 'not ADA accessible'}`}
         actions={
           <>
-            <Button variant="outline" onClick={() => navigate(`/map?focus=${station.id}`)}>
+            <Button variant="outline" onClick={() => dashNavigate(`/map?focus=${station.id}`)}>
               <MapPin />
               Map
             </Button>
             <Button
               variant="outline"
-              onClick={() => navigate(exploreHref({ metrics: ['rail_avg_weekday_entries'], groupBy: ['metric_time__week'], where, range: '1y', chart: 'line' }, station.name))}
+              onClick={() => dashNavigate(exploreHref({ metrics: ['rail_avg_weekday_entries'], groupBy: ['metric_time__week'], where, range: '1y', chart: 'line' }, station.name))}
             >
               <SlidersHorizontal />
               Explore
@@ -146,7 +146,7 @@ function StationDetail({ stationId }: { stationId: string }) {
 
       <div className="flex flex-wrap items-center gap-2">
         {station.lines.map((l) => (
-          <a key={l} href={href(`/lines/line?id=${ds.lineByName.get(l)?.id}`)} className="rounded-full border px-2.5 py-1 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">
+          <a key={l} href={dashHref(`/lines/line?id=${ds.lineByName.get(l)?.id}`)} className="rounded-full border px-2.5 py-1 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">
             <LineChip name={l} />
           </a>
         ))}
@@ -320,7 +320,7 @@ function StationDetail({ stationId }: { stationId: string }) {
               <ul className="flex flex-col">
                 {nearby.map(({ s, d }) => (
                   <li key={s.id}>
-                    <a href={href(`/rail/station?id=${s.id}`)} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-md px-2 py-1.5 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">
+                    <a href={dashHref(`/rail/station?id=${s.id}`)} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-md px-2 py-1.5 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">
                       <span className="min-w-0 truncate">{s.name}</span>
                       <span className="text-xs text-muted-foreground tabular-nums">{d.toFixed(1)} km</span>
                       <span className="w-14 text-right text-xs font-medium tabular-nums">{formatCompact(nearbyStats.get(s.id) ?? null)}</span>

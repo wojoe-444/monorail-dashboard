@@ -21,7 +21,7 @@ import { useQueryOrThrow } from '@/features/semantic/useQuery'
 import { useRangeParam } from '@/features/semantic/useRangeParam'
 import { exploreHref, type ViewSpec } from '@/features/semantic/views'
 import { detectExceptions, KIND_LABEL, KIND_VARIANT } from '@/features/transit/exceptions'
-import { navigate } from '@/lib/router'
+import { dashNavigate } from '@/app/hub'
 
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 const DOW = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -34,7 +34,7 @@ export function RouteDetailPage() {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader title="Route not found" description={id ? `No bus route "${id}" in the data.` : 'No route selected.'} />
-        <Button variant="outline" className="w-fit" onClick={() => navigate('/bus')}>
+        <Button variant="outline" className="w-fit" onClick={() => dashNavigate('/bus')}>
           <ArrowLeft />
           All routes
         </Button>
@@ -95,7 +95,7 @@ function RouteDetail({ routeId }: { routeId: string }) {
         title={route.name}
         description={`${route.type} bus route${route.lastDay !== null && route.lastDay < ds.maxDay - 7 ? ` · no data since ${formatDay(route.lastDay)}` : ''}`}
         actions={
-          <Button variant="outline" onClick={() => navigate(exploreHref({ metrics: ['bus_avg_weekday_boardings'], groupBy: ['metric_time__week'], where, range: '1y', chart: 'line' }, `Route ${route.id}`))}>
+          <Button variant="outline" onClick={() => dashNavigate(exploreHref({ metrics: ['bus_avg_weekday_boardings'], groupBy: ['metric_time__week'], where, range: '1y', chart: 'line' }, `Route ${route.id}`))}>
             <SlidersHorizontal />
             Explore
           </Button>

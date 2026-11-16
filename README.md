@@ -21,6 +21,15 @@ Built on the [MonoRail UI template](https://github.com/wojoe-444/monorail-ui) (R
 
 Every chart has a table view, CSV export, "Open in Explore" and "Copy as mf query". Filters live in the URL, so any view is a link.
 
+### One app, several dashboards
+
+The app is a small hub (`#/`) with three dashboards:
+- **CTA ridership** (`#/cta`): everything above.
+- **Station accessibility** (`#/accessibility`): a light dashboard that shares the CTA semantic layer.
+- **New dashboard** (`#/starter`): a blank scaffold to copy.
+
+The hub is optional. With one dashboard registered in `src/app/dashboards.ts`, the app is a plain single dashboard. See [docs/multiple-dashboards.md](./docs/multiple-dashboards.md) for when to use a hub, when to build separate apps instead, and the conventions.
+
 ## Run it
 
 ```sh

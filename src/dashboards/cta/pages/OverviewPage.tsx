@@ -26,7 +26,7 @@ import { detectExceptions, KIND_LABEL, KIND_VARIANT } from '@/features/transit/e
 import { Delta } from '@/features/transit/Delta'
 import { LineSwatch } from '@/features/transit/LineChip'
 import { useUrlParams } from '@/hooks/useUrlParams'
-import { href, navigate } from '@/lib/router'
+import { dashHref, dashNavigate } from '@/app/hub'
 import { cn } from '@/lib/utils'
 
 const PERIODS = ['1d', '7d', '28d', '90d', 'ytd'] as const
@@ -154,7 +154,7 @@ export function OverviewPage() {
         title="System overview"
         description={`Rail entries and bus boardings across the CTA. Data through ${formatDay(ds.maxDay, true)}; the CTA publishes about eight weeks behind.`}
         actions={
-          <Button variant="outline" onClick={() => navigate('/exceptions')}>
+          <Button variant="outline" onClick={() => dashNavigate('/exceptions')}>
             <TriangleAlert />
             Exceptions
           </Button>
@@ -300,7 +300,7 @@ export function OverviewPage() {
               value: r.rail_avg_weekday_entries as number,
               display: formatCompact(r.rail_avg_weekday_entries as number),
               aside: <Delta v={num(r.rail_avg_weekday_yoy)} />,
-              href: href(`/rail/station?id=${r.station}`),
+              href: dashHref(`/rail/station?id=${r.station}`),
             }))}
           />
         </ChartCard>
@@ -321,7 +321,7 @@ export function OverviewPage() {
             <CardTitle>Lines</CardTitle>
             <CardDescription>Average weekday entries, split across the all-day lines at transfer stations.</CardDescription>
             <CardAction>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/lines')}>
+              <Button variant="ghost" size="sm" onClick={() => dashNavigate('/lines')}>
                 All lines
                 <ArrowRight />
               </Button>
@@ -334,7 +334,7 @@ export function OverviewPage() {
                 return (
                   <li key={line.id}>
                     <a
-                      href={href(`/lines/line?id=${line.id}`)}
+                      href={dashHref(`/lines/line?id=${line.id}`)}
                       className="grid grid-cols-[1fr_auto_4.5rem] items-center gap-3 rounded-md px-2 py-1.5 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <span className="flex items-center gap-2">
@@ -381,7 +381,7 @@ export function OverviewPage() {
             <CardTitle>Exceptions, last 7 days</CardTitle>
             <CardDescription>Stations and routes 40%+ off their usual weekday pattern.</CardDescription>
             <CardAction>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/exceptions')}>
+              <Button variant="ghost" size="sm" onClick={() => dashNavigate('/exceptions')}>
                 Review
                 <ArrowRight />
               </Button>
@@ -396,7 +396,7 @@ export function OverviewPage() {
                   <li key={e.id} className="flex items-center justify-between gap-3 py-2">
                     <a
                       className="min-w-0 rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-                      href={href(e.mode === 'rail' ? `/rail/station?id=${e.entityId}` : `/bus/route?id=${encodeURIComponent(e.entityId)}`)}
+                      href={dashHref(e.mode === 'rail' ? `/rail/station?id=${e.entityId}` : `/bus/route?id=${encodeURIComponent(e.entityId)}`)}
                     >
                       <span className="block truncate text-sm font-medium">{e.entityName}</span>
                       <span className="block text-xs text-muted-foreground">
@@ -427,7 +427,7 @@ function MoverList({ title, rows }: { title: string; rows: Record<string, string
         {rows.map((r) => (
           <li key={String(r.station)}>
             <a
-              href={href(`/rail/station?id=${r.station}`)}
+              href={dashHref(`/rail/station?id=${r.station}`)}
               className="grid grid-cols-[1fr_auto_4.5rem] items-center gap-3 rounded-md px-2 py-1.5 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span className="truncate">{String(r.station__station_name)}</span>
