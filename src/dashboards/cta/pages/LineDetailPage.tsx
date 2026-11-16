@@ -1,13 +1,12 @@
 import { ArrowLeft } from 'lucide-react'
 
 import { RankedBars } from '@/components/charts/RankedBars'
-import { SortTable, type SortColumn } from '@/components/charts/SortTable'
+import { SortTable, sortTableCsv, type SortColumn } from '@/components/charts/SortTable'
 import { StatTile } from '@/components/charts/StatTile'
 import { TimeSeriesChart } from '@/components/charts/TimeSeriesChart'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartCard } from '@/features/semantic/components/ChartCard'
 import { RangeControl } from '@/features/semantic/components/RangeControl'
 import { useDataset, type Station } from '@/features/semantic/data'
@@ -56,19 +55,41 @@ function LineDetail({ lineId }: { lineId: string }) {
   const lineWhere = [`{{ Entity('line') }} = '${line.id}'`]
   const stations = ds.stations.filter((s) => s.lines.includes(line.name))
 
-  const kpi = useQueryOrThrow({ metrics: ['line_avg_weekday_allocated', 'line_avg_weekday_yoy', 'line_avg_daily_allocated'], where: lineWhere, timeRange: window }).rows[0] ?? {}
+  const kpi =
+    useQueryOrThrow({
+      metrics: ['line_avg_weekday_allocated', 'line_avg_weekday_yoy', 'line_avg_daily_allocated'],
+      where: lineWhere,
+      timeRange: window,
+    }).rows[0] ?? {}
   const base = baseline2019(window)
   const kpi2019 = useQueryOrThrow({ metrics: ['line_avg_weekday_allocated'], where: lineWhere, timeRange: base ?? window }).rows[0] ?? {}
   const recovery = base ? ratioOf(num(kpi.line_avg_weekday_allocated), num(kpi2019.line_avg_weekday_allocated)) : null
 
-  const monthlyView: ViewSpec = { metrics: ['line_avg_weekday_allocated'], groupBy: ['metric_time__month'], where: lineWhere, range: 'all', chart: 'line' }
+  const monthlyView: ViewSpec = {
+    metrics: ['line_avg_weekday_allocated'],
+    groupBy: ['metric_time__month'],
+    where: lineWhere,
+    range: 'all',
+    chart: 'line',
+  }
   const monthly = useQueryOrThrow({ metrics: monthlyView.metrics, groupBy: monthlyView.groupBy, where: lineWhere })
   const monthlyPivot = pivotResult(monthly)
 
-  const sectorView: ViewSpec = { metrics: ['line_avg_weekday_allocated'], groupBy: ['station__sector'], where: lineWhere, range: preset, custom, chart: 'bar' }
+  const sectorView: ViewSpec = {
+    metrics: ['line_avg_weekday_allocated'],
+    groupBy: ['station__sector'],
+    where: lineWhere,
+    range: preset,
+    custom,
+    chart: 'bar',
+  }
   const sectors = useQueryOrThrow({ metrics: sectorView.metrics, groupBy: sectorView.groupBy, where: lineWhere, timeRange: window })
 
-  const stationQ = useQueryOrThrow({ metrics: ['rail_avg_weekday_entries', 'rail_avg_weekday_yoy'], groupBy: ['station'], timeRange: window })
+  const stationQ = useQueryOrThrow({
+    metrics: ['rail_avg_weekday_entries', 'rail_avg_weekday_yoy'],
+    groupBy: ['station'],
+    timeRange: window,
+  })
   const station2019 = useQueryOrThrow({ metrics: ['rail_avg_weekday_entries'], groupBy: ['station'], timeRange: base ?? window })
   const by = new Map(stationQ.rows.map((r) => [String(r.station), r]))
   const by2019 = new Map(station2019.rows.map((r) => [String(r.station), num(r.rail_avg_weekday_entries)]))
@@ -86,15 +107,36 @@ function LineDetail({ lineId }: { lineId: string }) {
       label: 'Station',
       sort: (r) => r.station.name,
       render: (r) => (
-        <a href={dashHref(`/rail/station?id=${r.station.id}`)} className="rounded-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+        <a
+          href={dashHref(`/rail/station?id=${r.station.id}`)}
+          className="rounded-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+        >
           {r.station.name}
         </a>
       ),
     },
-    { key: 'lines', label: 'Lines', sort: (r) => r.station.lines.length, render: (r) => <LineDots names={r.station.lines} /> },
+    {
+      key: 'lines',
+      label: 'Lines',
+      sort: (r) => r.station.lines.length,
+      csv: (r) => r.station.lines.join(', '),
+      render: (r) => <LineDots names={r.station.lines} />,
+    },
     { key: 'sector', label: 'Sector', sort: (r) => r.station.sector, render: (r) => r.station.sector },
-    { key: 'ada', label: 'ADA', sort: (r) => (r.station.ada ? 1 : 0), render: (r) => (r.station.ada ? <Badge variant="success">Accessible</Badge> : <Badge variant="secondary">No</Badge>) },
-    { key: 'weekday', label: 'Avg weekday', title: 'Full station entries (all lines)', align: 'right', sort: (r) => r.weekday, render: (r) => formatValue(r.weekday) },
+    {
+      key: 'ada',
+      label: 'ADA',
+      sort: (r) => (r.station.ada ? 1 : 0),
+      render: (r) => (r.station.ada ? <Badge variant="success">Accessible</Badge> : <Badge variant="secondary">No</Badge>),
+    },
+    {
+      key: 'weekday',
+      label: 'Avg weekday',
+      title: 'Full station entries (all lines)',
+      align: 'right',
+      sort: (r) => r.weekday,
+      render: (r) => formatValue(r.weekday),
+    },
     { key: 'yoy', label: 'vs 52 wks', align: 'right', sort: (r) => r.yoy, render: (r) => <Delta v={r.yoy} /> },
     { key: 'recovery', label: 'of 2019', align: 'right', sort: (r) => r.recovery, render: (r) => <ShareOf v={r.recovery} /> },
   ]
@@ -116,14 +158,34 @@ function LineDetail({ lineId }: { lineId: string }) {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile hero label="Avg weekday (allocated)" value={formatCompact(num(kpi.line_avg_weekday_allocated))} delta={num(kpi.line_avg_weekday_yoy) ?? undefined} deltaLabel="vs 52 wks" />
+        <StatTile
+          hero
+          label="Avg weekday (allocated)"
+          value={formatCompact(num(kpi.line_avg_weekday_allocated))}
+          delta={num(kpi.line_avg_weekday_yoy) ?? undefined}
+          deltaLabel="vs 52 wks"
+        />
         <StatTile label="Avg daily, all days" value={formatCompact(num(kpi.line_avg_daily_allocated))} />
-        <StatTile label="Weekday vs 2019" value={recovery !== null ? formatPercent(recovery, 0) : '—'} hint={base ? 'same weeks of 2019' : undefined} />
-        <StatTile label="ADA stations" value={`${adaCount} of ${stations.length}`} hint={stations.length ? formatPercent(adaCount / stations.length, 0) : undefined} />
+        <StatTile
+          label="Weekday vs 2019"
+          value={recovery !== null ? formatPercent(recovery, 0) : '—'}
+          hint={base ? 'same weeks of 2019' : undefined}
+        />
+        <StatTile
+          label="ADA stations"
+          value={`${adaCount} of ${stations.length}`}
+          hint={stations.length ? formatPercent(adaCount / stations.length, 0) : undefined}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <ChartCard className="xl:col-span-2" title="Monthly since 2019" description="Average weekday entries, allocated." view={monthlyView} result={monthly}>
+        <ChartCard
+          className="xl:col-span-2"
+          title="Monthly since 2019"
+          description="Average weekday entries, allocated."
+          view={monthlyView}
+          result={monthly}
+        >
           <TimeSeriesChart
             data={monthlyPivot.data}
             series={[{ key: 'line_avg_weekday_allocated', label: `${line.name} Line`, color: line.color }]}
@@ -142,20 +204,30 @@ function LineDetail({ lineId }: { lineId: string }) {
             color={line.color}
             items={sectors.rows
               .filter((r) => num(r.line_avg_weekday_allocated) !== null)
-              .map((r) => ({ key: String(r.station__sector), label: String(r.station__sector), value: r.line_avg_weekday_allocated as number, display: formatCompact(r.line_avg_weekday_allocated as number) }))}
+              .map((r) => ({
+                key: String(r.station__sector),
+                label: String(r.station__sector),
+                value: r.line_avg_weekday_allocated as number,
+                display: formatCompact(r.line_avg_weekday_allocated as number),
+              }))}
           />
         </ChartCard>
       </div>
 
-      <Card className="gap-2">
-        <CardHeader>
-          <CardTitle>Stations on the {line.name} Line</CardTitle>
-          <CardDescription>Full station entries, all lines. Transfer stations show every line that serves them.</CardDescription>
-        </CardHeader>
-        <CardContent className="px-2">
-          <SortTable rows={rows} columns={columns} rowKey={(r) => r.station.id} initialSort={{ key: 'weekday', desc: true }} caption={`Stations on the ${line.name} Line`} />
-        </CardContent>
-      </Card>
+      <ChartCard
+        title={`Stations on the ${line.name} Line`}
+        description="Full station entries, all lines. Transfer stations show every line that serves them."
+        csv={() => sortTableCsv(rows, columns)}
+        contentClassName="px-2"
+      >
+        <SortTable
+          rows={rows}
+          columns={columns}
+          rowKey={(r) => r.station.id}
+          initialSort={{ key: 'weekday', desc: true }}
+          caption={`Stations on the ${line.name} Line`}
+        />
+      </ChartCard>
     </div>
   )
 }

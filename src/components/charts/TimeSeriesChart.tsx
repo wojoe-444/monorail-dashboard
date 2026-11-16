@@ -1,7 +1,19 @@
 import { useId } from 'react'
-import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import {
+  Area,
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  ReferenceArea,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 
 import { ChartTooltipContent } from './ChartTooltip'
+import { useChartHeight } from './frame'
 import { Legend } from './Legend'
 import { axisProps, gridProps } from './palette'
 
@@ -48,7 +60,7 @@ export function TimeSeriesChart({
   formatTitle,
   formatValue,
   formatAxis,
-  height = 280,
+  height: ownHeight = 280,
   area,
   zeroBaseline = true,
   markers,
@@ -58,6 +70,7 @@ export function TimeSeriesChart({
   ticks,
   footer,
 }: TimeSeriesChartProps) {
+  const height = useChartHeight(ownHeight, series.length > 1 ? 40 : 0)
   const gradientId = useId().replace(/:/g, '')
   const fillArea = area && series.filter((s) => !s.reference).length === 1
   return (
@@ -78,7 +91,15 @@ export function TimeSeriesChart({
               </linearGradient>
             </defs>
             <CartesianGrid {...gridProps} />
-            <XAxis dataKey="t" {...axisProps} tickFormatter={formatTick} minTickGap={36} tickMargin={8} ticks={ticks} interval={ticks ? 0 : undefined} />
+            <XAxis
+              dataKey="t"
+              {...axisProps}
+              tickFormatter={formatTick}
+              minTickGap={36}
+              tickMargin={8}
+              ticks={ticks}
+              interval={ticks ? 0 : undefined}
+            />
             <YAxis
               {...axisProps}
               axisLine={false}
@@ -88,7 +109,14 @@ export function TimeSeriesChart({
               tickMargin={4}
             />
             {band && (
-              <ReferenceArea x1={band.from} x2={band.to} fill="var(--muted-foreground)" fillOpacity={0.06} strokeOpacity={0} ifOverflow="extendDomain" />
+              <ReferenceArea
+                x1={band.from}
+                x2={band.to}
+                fill="var(--muted-foreground)"
+                fillOpacity={0.06}
+                strokeOpacity={0}
+                ifOverflow="extendDomain"
+              />
             )}
             {markers?.map((m) => (
               <ReferenceLine key={m.t} x={m.t} stroke="var(--chart-axis)" strokeWidth={1} label={undefined} />

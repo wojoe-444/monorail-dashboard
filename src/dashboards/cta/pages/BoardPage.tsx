@@ -49,12 +49,20 @@ export function BoardPage() {
           <div>
             <div className="font-semibold">Nothing pinned yet</div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Pin a chart with its <span className="font-medium">⋯ menu &gt; Pin to My board</span>, save a view in Explore, or start with a team view:
+              Pin a chart with its <span className="font-medium">options menu &gt; Pin to My board</span>, save a view in Explore, or start
+              with a team view:
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             {engine.manifest.savedQueries.map((q) => (
-              <Button key={q.name} size="sm" variant="outline" onClick={() => saveView({ name: q.label, description: q.description, spec: specFromSavedQuery(q), from: q.name, pinned: true })}>
+              <Button
+                key={q.name}
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  saveView({ name: q.label, description: q.description, spec: specFromSavedQuery(q), from: q.name, pinned: true })
+                }
+              >
                 <Pin />
                 {q.label}
               </Button>
@@ -87,13 +95,18 @@ export function BoardPage() {
         <Card className="gap-2">
           <CardHeader>
             <CardTitle>All saved views</CardTitle>
-            <CardDescription>Pin a view to show it on the board. Views live in this browser; share one through Explore's saved-query YAML.</CardDescription>
+            <CardDescription>
+              Pin a view to show it on the board. Views live in this browser; share one through Explore's saved-query YAML.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col divide-y">
               {views.map((v) => (
                 <li key={v.id} className="flex flex-wrap items-center gap-3 py-2">
-                  <a href={dashHref(`/explore?view=${v.id}`)} className="min-w-0 flex-1 rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+                  <a
+                    href={dashHref(`/explore?view=${v.id}`)}
+                    className="min-w-0 flex-1 rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                  >
                     <span className="block truncate text-sm font-medium">{v.name}</span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {v.spec.metrics.map((m) => (engine.hasMetric(m) ? engine.metric(m).label : `${m} (removed)`)).join(', ')} ·{' '}
@@ -103,7 +116,9 @@ export function BoardPage() {
                   {v.from && <Badge variant="info">From team view</Badge>}
                   {v.pinned ? <Badge variant="primary">On board</Badge> : null}
                   <span className="flex items-center">
-                    {v.pinned ? iconButton('Unpin', <PinOff />, () => setPinned(v.id, false)) : iconButton('Pin to board', <Pin />, () => setPinned(v.id, true))}
+                    {v.pinned
+                      ? iconButton('Unpin', <PinOff />, () => setPinned(v.id, false))
+                      : iconButton('Pin to board', <Pin />, () => setPinned(v.id, true))}
                     {iconButton('Delete', <Trash2 />, () => setConfirm(v))}
                   </span>
                 </li>

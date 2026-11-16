@@ -4,16 +4,24 @@ import { Check, ChevronDown, Copy, Download, Link2, RotateCcw, Save, Users } fro
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Card } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Segmented } from '@/components/ui/segmented'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ChartCard } from '@/features/semantic/components/ChartCard'
 import { RangeControl } from '@/features/semantic/components/RangeControl'
 import { ResultChart } from '@/features/semantic/components/ResultChart'
 import { ResultTable } from '@/features/semantic/components/ResultTable'
 import type { SemanticEngine } from '@/features/semantic/core/engine.ts'
-import { downloadCsv } from '@/features/semantic/csv'
+import { downloadCsv, resultCsvData } from '@/features/semantic/csv'
 import { useDataset } from '@/features/semantic/data'
 import { FilterEditor } from '@/features/semantic/explore/FilterEditor'
 import { GroupByPicker } from '@/features/semantic/explore/GroupByPicker'
@@ -23,11 +31,27 @@ import { formatRange } from '@/features/semantic/format'
 import { mfCommand, savedQueryYaml } from '@/features/semantic/mf'
 import { resolveRange } from '@/features/semantic/ranges'
 import { useQuery } from '@/features/semantic/useQuery'
-import { decodeSpec, encodeSpec, exploreHref, getView, saveView, specFromSavedQuery, useSavedViews, type ChartKind, type ViewSpec } from '@/features/semantic/views'
+import {
+  decodeSpec,
+  encodeSpec,
+  exploreHref,
+  getView,
+  saveView,
+  specFromSavedQuery,
+  useSavedViews,
+  type ChartKind,
+  type ViewSpec,
+} from '@/features/semantic/views'
 import { useUrlParams } from '@/hooks/useUrlParams'
 import { dashNavigate } from '@/app/hub'
 
-const DEFAULT_SPEC: ViewSpec = { metrics: ['rail_avg_weekday_entries', 'bus_avg_weekday_boardings'], groupBy: ['metric_time__week'], where: [], range: '1y', chart: 'line' }
+const DEFAULT_SPEC: ViewSpec = {
+  metrics: ['rail_avg_weekday_entries', 'bus_avg_weekday_boardings'],
+  groupBy: ['metric_time__week'],
+  where: [],
+  range: '1y',
+  chart: 'line',
+}
 
 export function ExplorePage() {
   const ds = useDataset()
@@ -105,7 +129,8 @@ export function ExplorePage() {
 
       {missingView && (
         <div role="alert" className="rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning-soft-foreground">
-          This link points to a view saved in someone else's browser, so it can't open here. Ask for a fresh link (Copy link now shares the whole view), or start from a team view below.
+          This link points to a view saved in someone else's browser, so it can't open here. Ask for a fresh link (Copy link now shares the
+          whole view), or start from a team view below.
         </div>
       )}
 
@@ -115,7 +140,13 @@ export function ExplorePage() {
           Team views
         </span>
         {engine.manifest.savedQueries.map((q) => (
-          <Button key={q.name} size="sm" variant={savedName === q.name && !dirty ? 'soft' : 'outline'} title={q.description} onClick={() => open({ saved: q.name })}>
+          <Button
+            key={q.name}
+            size="sm"
+            variant={savedName === q.name && !dirty ? 'soft' : 'outline'}
+            title={q.description}
+            onClick={() => open({ saved: q.name })}
+          >
             {q.label}
           </Button>
         ))}
@@ -148,10 +179,20 @@ export function ExplorePage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
         <Card className="gap-5 self-start py-5">
           <Section title="Metrics" hint={`${spec.metrics.length} selected`}>
-            <MetricPicker selected={spec.metrics} onChange={(metrics) => set({ metrics })} requires={[...spec.groupBy, ...whereRefs(spec.where)]} />
+            <MetricPicker
+              selected={spec.metrics}
+              onChange={(metrics) => set({ metrics })}
+              requires={[...spec.groupBy, ...whereRefs(spec.where)]}
+            />
           </Section>
           <Section title="Group by">
-            <GroupByPicker metrics={spec.metrics} groupBy={spec.groupBy} onChange={(groupBy) => set({ groupBy, chart: !groupBy.some((g) => g.startsWith('metric_time')) && spec.chart !== 'table' ? 'bar' : spec.chart })} />
+            <GroupByPicker
+              metrics={spec.metrics}
+              groupBy={spec.groupBy}
+              onChange={(groupBy) =>
+                set({ groupBy, chart: !groupBy.some((g) => g.startsWith('metric_time')) && spec.chart !== 'table' ? 'bar' : spec.chart })
+              }
+            />
           </Section>
           <Section title="Filters" hint={spec.where.length ? `${spec.where.length} active` : undefined}>
             <FilterEditor key={spec.where.join('|')} metrics={spec.metrics} where={spec.where} onChange={(where) => set({ where })} />
@@ -165,13 +206,22 @@ export function ExplorePage() {
                 options={[
                   { value: 'line', label: 'Line', disabled: !hasTime },
                   { value: 'bar', label: 'Bar' },
-                  { value: 'stacked', label: 'Stacked', disabled: !hasTime || !stackable, title: stackable ? undefined : 'Averages, ratios and shares do not add up' },
+                  {
+                    value: 'stacked',
+                    label: 'Stacked',
+                    disabled: !hasTime || !stackable,
+                    title: stackable ? undefined : 'Averages, ratios and shares do not add up',
+                  },
                   { value: 'table', label: 'Table' },
                 ]}
                 className="w-full justify-between"
               />
               {grain === 'day' && spec.chart === 'line' && (
-                <NativeSelect aria-label="Smoothing" value={String(spec.smooth ?? 0)} onChange={(e) => set({ smooth: Number(e.target.value) || undefined })}>
+                <NativeSelect
+                  aria-label="Smoothing"
+                  value={String(spec.smooth ?? 0)}
+                  onChange={(e) => set({ smooth: Number(e.target.value) || undefined })}
+                >
                   <option value="0">No smoothing</option>
                   <option value="7">7-day average</option>
                   <option value="28">28-day average</option>
@@ -179,7 +229,11 @@ export function ExplorePage() {
               )}
               {!hasTime && sortKey && (
                 <div className="grid grid-cols-[1fr_auto] gap-2">
-                  <NativeSelect aria-label="Sort by" value={sortKey} onChange={(e) => set({ orderBy: { key: e.target.value, desc: spec.orderBy?.desc ?? true } })}>
+                  <NativeSelect
+                    aria-label="Sort by"
+                    value={sortKey}
+                    onChange={(e) => set({ orderBy: { key: e.target.value, desc: spec.orderBy?.desc ?? true } })}
+                  >
                     {spec.metrics.map((m) => (
                       <option key={m} value={m}>
                         Sort by {engine.metric(m).label}
@@ -198,7 +252,11 @@ export function ExplorePage() {
                 </div>
               )}
               {!hasTime && (
-                <NativeSelect aria-label="Rows" value={String(spec.limit ?? 0)} onChange={(e) => set({ limit: Number(e.target.value) || undefined })}>
+                <NativeSelect
+                  aria-label="Rows"
+                  value={String(spec.limit ?? 0)}
+                  onChange={(e) => set({ limit: Number(e.target.value) || undefined })}
+                >
                   <option value="10">Top 10</option>
                   <option value="25">Top 25</option>
                   <option value="50">Top 50</option>
@@ -218,27 +276,30 @@ export function ExplorePage() {
         </Card>
 
         <div className="flex min-w-0 flex-col gap-4">
-          <Card className="gap-4">
-            <CardHeader>
-              <CardTitle className="flex flex-wrap items-center gap-2">
-                {title}
+          <ChartCard
+            title={title}
+            titleAddon={
+              <>
                 {team && !dirty && <Badge variant="info">Team view</Badge>}
                 {saved && !dirty && <Badge variant="primary">My view</Badge>}
                 {dirty && <Badge variant="warning">Unsaved changes</Badge>}
-              </CardTitle>
-              <CardDescription>{saved?.description ?? team?.description ?? formatRange(window.start, window.end)}</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
+              </>
+            }
+            description={saved?.description ?? team?.description ?? formatRange(window.start, window.end)}
+            csv={result ? () => resultCsvData(result) : undefined}
+            contentClassName="flex flex-col gap-4"
+          >
+            <div data-export-ignore>
               <RangeControl value={spec.range} custom={spec.custom} onChange={(range, custom) => set({ range, custom })} />
-              {!spec.metrics.length ? (
-                <Empty>Pick a metric on the left to start.</Empty>
-              ) : error ? (
-                <div className="rounded-lg bg-destructive-soft px-4 py-3 text-sm text-destructive-soft-foreground">{error}</div>
-              ) : result ? (
-                <ResultChart result={result} chart={spec.chart} smooth={spec.smooth} height={360} title={title} />
-              ) : null}
-            </CardContent>
-          </Card>
+            </div>
+            {!spec.metrics.length ? (
+              <Empty>Pick a metric on the left to start.</Empty>
+            ) : error ? (
+              <div className="rounded-lg bg-destructive-soft px-4 py-3 text-sm text-destructive-soft-foreground">{error}</div>
+            ) : result ? (
+              <ResultChart result={result} chart={spec.chart} smooth={spec.smooth} height={360} title={title} />
+            ) : null}
+          </ChartCard>
 
           {result && (
             <Card className="gap-3 py-4">
@@ -264,21 +325,30 @@ export function ExplorePage() {
                   {spec.chart === 'table' ? (
                     <p className="px-2 text-sm text-muted-foreground">The table is shown above.</p>
                   ) : (
-                    <ResultTable result={result} caption={title} signed={result.columns.filter((c) => /_yoy$/.test(c.key)).map((c) => c.key)} />
+                    <ResultTable
+                      result={result}
+                      caption={title}
+                      signed={result.columns.filter((c) => /_yoy$/.test(c.key)).map((c) => c.key)}
+                    />
                   )}
                 </TabsContent>
                 <TabsContent value="mf" className="flex flex-col gap-2 px-4">
-                  <p className="text-sm text-muted-foreground">The same question against the DuckDB warehouse, from the semantic/ folder:</p>
+                  <p className="text-sm text-muted-foreground">
+                    The same question against the DuckDB warehouse, from the semantic/ folder:
+                  </p>
                   <CodeBlock text={mf.command} onCopy={() => copy('mf', mf.command)} copied={copied === 'mf'} />
                   {mf.note && <p className="rounded-lg bg-info-soft px-3 py-2 text-xs text-info-soft-foreground">{mf.note}</p>}
                 </TabsContent>
                 <TabsContent value="plan" className="flex flex-col gap-2 px-4">
-                  <p className="text-sm text-muted-foreground">One scan per measure; ratio and derived metrics combine the scans by group.</p>
+                  <p className="text-sm text-muted-foreground">
+                    One scan per measure; ratio and derived metrics combine the scans by group.
+                  </p>
                   <CodeBlock text={result.plan.join('\n')} onCopy={() => copy('plan', result.plan.join('\n'))} copied={copied === 'plan'} />
                 </TabsContent>
                 <TabsContent value="yaml" className="flex flex-col gap-2 px-4">
                   <p className="text-sm text-muted-foreground">
-                    To make this a team view, add it to <code className="font-mono text-xs">semantic/models/semantic/saved_queries.yml</code> in a pull request. After
+                    To make this a team view, add it to{' '}
+                    <code className="font-mono text-xs">semantic/models/semantic/saved_queries.yml</code> in a pull request. After
                     <code className="mx-1 font-mono text-xs">npm run data:build</code> it shows under Team views for everyone.
                   </p>
                   <CodeBlock text={yaml} onCopy={() => copy('yaml', yaml)} copied={copied === 'yaml'} />
@@ -335,7 +405,9 @@ function CodeBlock({ text, onCopy, copied }: { text: string; onCopy: () => void;
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <div className="flex h-60 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">{children}</div>
+  return (
+    <div className="flex h-60 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">{children}</div>
+  )
 }
 
 function whereRefs(where: string[]): string[] {

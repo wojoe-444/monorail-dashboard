@@ -7,16 +7,16 @@ import { StatTile } from '@/components/charts/StatTile'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Segmented } from '@/components/ui/segmented'
+import { ChartCard } from '@/features/semantic/components/ChartCard'
 import { RangeControl } from '@/features/semantic/components/RangeControl'
 import type { QueryResult } from '@/features/semantic/core/types.ts'
-import { downloadCsv } from '@/features/semantic/csv'
+import { downloadCsv, resultCsvData } from '@/features/semantic/csv'
 import { useDataset, type Station } from '@/features/semantic/data'
-import { formatCompact, formatPercent, formatValue } from '@/features/semantic/format'
+import { formatCompact, formatPercent, formatValue, formatRange } from '@/features/semantic/format'
 import { baseline2019, countDayType, recentWeeks, weekStarts } from '@/features/semantic/ranges'
 import { useQueryOrThrow } from '@/features/semantic/useQuery'
 import { useRangeParam } from '@/features/semantic/useRangeParam'
@@ -49,14 +49,29 @@ export function StationsPage() {
   const ada = (params.get('ada') ?? 'all') as 'all' | 'yes' | 'no'
   const q = params.get('q') ?? ''
 
-  const metrics = ['rail_avg_weekday_entries', 'rail_avg_weekday_yoy', 'rail_avg_saturday_entries', 'rail_avg_sunday_entries', 'rail_entries']
+  const metrics = [
+    'rail_avg_weekday_entries',
+    'rail_avg_weekday_yoy',
+    'rail_avg_saturday_entries',
+    'rail_avg_sunday_entries',
+    'rail_entries',
+  ]
   const current = useQueryOrThrow({ metrics, groupBy: ['station'], timeRange: window })
   const base = baseline2019(window)
   const before = useQueryOrThrow({ metrics: ['rail_avg_weekday_entries'], groupBy: ['station'], timeRange: base ?? window })
-  const weekly = useQueryOrThrow({ metrics: ['rail_entries'], groupBy: ['station', 'metric_time__week'], timeRange: recentWeeks(ds.maxDay) })
+  const weekly = useQueryOrThrow({
+    metrics: ['rail_entries'],
+    groupBy: ['station', 'metric_time__week'],
+    timeRange: recentWeeks(ds.maxDay),
+  })
   // The total divides weekday entries by the system's weekdays, not by each station's reporting days.
   const weekdayEntries = new Map(
-    useQueryOrThrow({ metrics: ['rail_entries'], groupBy: ['station'], where: ["{{ Dimension('service_day__day_type') }} = 'Weekday'"], timeRange: window }).rows.map((r) => [String(r.station), num(r.rail_entries) ?? 0]),
+    useQueryOrThrow({
+      metrics: ['rail_entries'],
+      groupBy: ['station'],
+      where: ["{{ Dimension('service_day__day_type') }} = 'Weekday'"],
+      timeRange: window,
+    }).rows.map((r) => [String(r.station), num(r.rail_entries) ?? 0]),
   )
   const systemWeekdays = countDayType(ds.dayType, window, 'Weekday')
 
@@ -113,7 +128,10 @@ export function StationsPage() {
       label: 'Station',
       sort: (r) => r.station.name,
       render: (r) => (
-        <a href={dashHref(`/rail/station?id=${r.station.id}`)} className="flex min-w-0 flex-col rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+        <a
+          href={dashHref(`/rail/station?id=${r.station.id}`)}
+          className="flex min-w-0 flex-col rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+        >
           <span className="truncate font-medium">{r.station.name}</span>
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             {r.station.sector}
@@ -132,7 +150,14 @@ export function StationsPage() {
       render: (r) => (r.station.ada ? <Badge variant="success">Accessible</Badge> : <Badge variant="secondary">No</Badge>),
     },
     { key: 'weekday', label: 'Avg weekday', align: 'right', sort: (r) => r.weekday, render: (r) => formatValue(r.weekday) },
-    { key: 'yoy', label: 'vs 52 wks', title: 'Average weekday entries vs the same days 52 weeks earlier', align: 'right', sort: (r) => r.weekdayYoy, render: (r) => <Delta v={r.weekdayYoy} /> },
+    {
+      key: 'yoy',
+      label: 'vs 52 wks',
+      title: 'Average weekday entries vs the same days 52 weeks earlier',
+      align: 'right',
+      sort: (r) => r.weekdayYoy,
+      render: (r) => <Delta v={r.weekdayYoy} />,
+    },
     {
       key: 'recovery',
       label: 'of 2019',
@@ -143,7 +168,14 @@ export function StationsPage() {
     },
     { key: 'sat', label: 'Avg Sat', align: 'right', sort: (r) => r.saturday, render: (r) => formatValue(r.saturday) },
     { key: 'sun', label: 'Avg Sun/hol', align: 'right', sort: (r) => r.sunday, render: (r) => formatValue(r.sunday) },
-    { key: 'share', label: 'Share', title: 'Share of all rail entries in the period', align: 'right', sort: (r) => r.share, render: (r) => (r.share !== null ? formatPercent(r.share, 1) : '—') },
+    {
+      key: 'share',
+      label: 'Share',
+      title: 'Share of all rail entries in the period',
+      align: 'right',
+      sort: (r) => r.share,
+      render: (r) => (r.share !== null ? formatPercent(r.share, 1) : '—'),
+    },
     {
       key: 'trend',
       label: '12 weeks',
@@ -152,7 +184,7 @@ export function StationsPage() {
     },
   ]
 
-  const exportRows = () => {
+  const tableResult = () => {
     const result: QueryResult = {
       columns: [
         { key: 'station_id', label: 'Station id', kind: 'entity' },
@@ -183,11 +215,19 @@ export function StationsPage() {
       plan: [],
       ms: 0,
     }
-    downloadCsv(result, `stations ${window.start} to ${window.end}`)
+    return result
   }
+  const exportName = `stations ${window.start} to ${window.end}`
+  const exportRows = () => downloadCsv(tableResult(), exportName)
 
   const where = [
-    ...(line ? [`{{ Dimension('station__lines') }} in (${allLineCombos(ds.stations, line).map((c) => `'${c}'`).join(', ')})`] : []),
+    ...(line
+      ? [
+          `{{ Dimension('station__lines') }} in (${allLineCombos(ds.stations, line)
+            .map((c) => `'${c}'`)
+            .join(', ')})`,
+        ]
+      : []),
     ...(sector ? [`{{ Dimension('station__sector') }} = '${sector}'`] : []),
     ...(ada !== 'all' ? [`{{ Dimension('station__ada_accessible') }} = ${ada === 'yes'}`] : []),
   ]
@@ -209,7 +249,14 @@ export function StationsPage() {
               onClick={() =>
                 dashNavigate(
                   exploreHref(
-                    { metrics: ['rail_avg_weekday_entries', 'rail_avg_weekday_yoy'], groupBy: ['station__station_name'], where, range: preset, custom, chart: 'table' },
+                    {
+                      metrics: ['rail_avg_weekday_entries', 'rail_avg_weekday_yoy'],
+                      groupBy: ['station__station_name'],
+                      where,
+                      range: preset,
+                      custom,
+                      chart: 'table',
+                    },
                     'Stations',
                   ),
                 )
@@ -269,31 +316,57 @@ export function StationsPage() {
           </Label>
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input id={`${id}-q`} value={q} onChange={(e) => setParams({ q: e.target.value })} placeholder="Station name or id" className="pl-8" />
+            <Input
+              id={`${id}-q`}
+              value={q}
+              onChange={(e) => setParams({ q: e.target.value })}
+              placeholder="Station name or id"
+              className="pl-8"
+            />
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Stations" value={String(rows.length)} hint={rows.length !== allRows.length ? `of ${allRows.length}` : 'reporting in period'} />
-        <StatTile label="Avg weekday entries" value={formatCompact(totalWeekday)} hint={`stations shown, per weekday (${systemWeekdays} in period)`} />
-        <StatTile label="Growing vs 52 wks" value={withYoy ? `${growing} of ${withYoy}` : '—'} hint={withYoy ? formatPercent(growing / withYoy, 0) : undefined} />
-        <StatTile label="Not ADA accessible" value={String(notAccessible)} hint={rows.length ? `${formatPercent(notAccessible / rows.length, 0)} of shown` : undefined} />
+        <StatTile
+          label="Stations"
+          value={String(rows.length)}
+          hint={rows.length !== allRows.length ? `of ${allRows.length}` : 'reporting in period'}
+        />
+        <StatTile
+          label="Avg weekday entries"
+          value={formatCompact(totalWeekday)}
+          hint={`stations shown, per weekday (${systemWeekdays} in period)`}
+        />
+        <StatTile
+          label="Growing vs 52 wks"
+          value={withYoy ? `${growing} of ${withYoy}` : '—'}
+          hint={withYoy ? formatPercent(growing / withYoy, 0) : undefined}
+        />
+        <StatTile
+          label="Not ADA accessible"
+          value={String(notAccessible)}
+          hint={rows.length ? `${formatPercent(notAccessible / rows.length, 0)} of shown` : undefined}
+        />
       </div>
 
-      <Card className="py-2">
-        <CardContent className="px-2">
-          <SortTable
-            rows={rows}
-            columns={columns}
-            rowKey={(r) => r.station.id}
-            initialSort={{ key: 'weekday', desc: true }}
-            caption="Rail stations"
-            stickyFirst
-            pageSize={60}
-          />
-        </CardContent>
-      </Card>
+      <ChartCard
+        title="Stations"
+        description={<>{formatRange(window.start, window.end)}. CSV has every row, not just the first page.</>}
+        csv={() => resultCsvData(tableResult())}
+        exportName={exportName}
+        contentClassName="px-2"
+      >
+        <SortTable
+          rows={rows}
+          columns={columns}
+          rowKey={(r) => r.station.id}
+          initialSort={{ key: 'weekday', desc: true }}
+          caption="Rail stations"
+          stickyFirst
+          pageSize={60}
+        />
+      </ChartCard>
     </div>
   )
 }

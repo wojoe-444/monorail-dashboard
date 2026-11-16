@@ -8,25 +8,35 @@ import { TimeSeriesChart } from '@/components/charts/TimeSeriesChart'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Segmented } from '@/components/ui/segmented'
 import { ChartCard } from '@/features/semantic/components/ChartCard'
 import { RangeControl } from '@/features/semantic/components/RangeControl'
 import { ResultTable } from '@/features/semantic/components/ResultTable'
 import { dayOfIso, isoOfDay } from '@/features/semantic/core/time.ts'
 import type { QueryResult } from '@/features/semantic/core/types.ts'
+import { resultCsvData } from '@/features/semantic/csv'
 import { useDataset } from '@/features/semantic/data'
-import { formatCompact, formatDay, formatPercent, formatPeriod, formatRange, formatSignedPercent, formatValue, ratioOf } from '@/features/semantic/format'
+import {
+  formatCompact,
+  formatDay,
+  formatPercent,
+  formatPeriod,
+  formatRange,
+  formatSignedPercent,
+  formatValue,
+  ratioOf,
+} from '@/features/semantic/format'
 import { pivotResult } from '@/features/semantic/pivot'
 import { baseline2019, countHolidays, priorYear, recentWeeks, resolveRange } from '@/features/semantic/ranges'
 import { useQueryOrThrow } from '@/features/semantic/useQuery'
 import { useRangeParam } from '@/features/semantic/useRangeParam'
 import type { ViewSpec } from '@/features/semantic/views'
-import { detectExceptions, KIND_LABEL, KIND_VARIANT } from '@/features/transit/exceptions'
+import { detectExceptions, episodesCsv, KIND_LABEL, KIND_VARIANT } from '@/features/transit/exceptions'
 import { Delta } from '@/features/transit/Delta'
 import { LineSwatch } from '@/features/transit/LineChip'
 import { useUrlParams } from '@/hooks/useUrlParams'
 import { dashHref, dashNavigate } from '@/app/hub'
+import { csvFromRecords } from '@/lib/download'
 import { cn } from '@/lib/utils'
 
 const PERIODS = ['1d', '7d', '28d', '90d', 'ytd'] as const
@@ -47,25 +57,30 @@ export function OverviewPage() {
   const mode: Mode = (['total', 'rail', 'bus'] as const).find((m) => m === params.get('mode')) ?? 'total'
 
   // KPIs for the selected period, vs 52 weeks earlier and vs the same weeks of 2019.
-  const kpi = useQueryOrThrow({
-    metrics: [
-      'total_rides',
-      'total_rides_yoy',
-      'total_avg_weekday_rides',
-      'rail_avg_weekday_entries',
-      'rail_avg_weekday_entries_ly',
-      'bus_avg_weekday_boardings',
-      'bus_avg_weekday_boardings_ly',
-      'rail_share',
-    ],
-    timeRange: window,
-  }).rows[0] ?? {}
+  const kpi =
+    useQueryOrThrow({
+      metrics: [
+        'total_rides',
+        'total_rides_yoy',
+        'total_avg_weekday_rides',
+        'rail_avg_weekday_entries',
+        'rail_avg_weekday_entries_ly',
+        'bus_avg_weekday_boardings',
+        'bus_avg_weekday_boardings_ly',
+        'rail_share',
+      ],
+      timeRange: window,
+    }).rows[0] ?? {}
   const base = baseline2019(window)
   // A total against a window with a different number of holidays (Labor Day in one, not the other) is not a like-for-like change.
   const holidaysNow = countHolidays(ds.holidays, window)
   const holidaysLy = countHolidays(ds.holidays, priorYear(window))
   const holidayMismatch = holidaysNow !== holidaysLy
-  const kpi2019 = useQueryOrThrow({ metrics: ['total_avg_weekday_rides', 'rail_avg_weekday_entries', 'bus_avg_weekday_boardings'], timeRange: base ?? window }).rows[0] ?? {}
+  const kpi2019 =
+    useQueryOrThrow({
+      metrics: ['total_avg_weekday_rides', 'rail_avg_weekday_entries', 'bus_avg_weekday_boardings'],
+      timeRange: base ?? window,
+    }).rows[0] ?? {}
   const weekdayLy = (num(kpi.rail_avg_weekday_entries_ly) ?? 0) + (num(kpi.bus_avg_weekday_boardings_ly) ?? 0) || null
   const weekdayNow = num(kpi.total_avg_weekday_rides)
   const recovery = base ? ratioOf(weekdayNow, num(kpi2019.total_avg_weekday_rides)) : null
@@ -91,15 +106,23 @@ export function OverviewPage() {
 
   // Recovery: monthly average weekday vs the same month of 2019.
   const monthly = useQueryOrThrow({ metrics: ['rail_avg_weekday_entries', 'bus_avg_weekday_boardings'], groupBy: ['metric_time__month'] })
-  const byMonth2019 = new Map(monthly.rows.filter((r) => String(r.metric_time__month).startsWith('2019')).map((r) => [String(r.metric_time__month).slice(5, 7), r]))
+  const byMonth2019 = new Map(
+    monthly.rows.filter((r) => String(r.metric_time__month).startsWith('2019')).map((r) => [String(r.metric_time__month).slice(5, 7), r]),
+  )
   const recoveryData = monthly.rows
     .filter((r) => !String(r.metric_time__month).startsWith('2019'))
     .map((r) => {
       const b = byMonth2019.get(String(r.metric_time__month).slice(5, 7))
       return {
         t: String(r.metric_time__month),
-        rail: b && num(r.rail_avg_weekday_entries) && num(b.rail_avg_weekday_entries) ? (r.rail_avg_weekday_entries as number) / (b.rail_avg_weekday_entries as number) : null,
-        bus: b && num(r.bus_avg_weekday_boardings) && num(b.bus_avg_weekday_boardings) ? (r.bus_avg_weekday_boardings as number) / (b.bus_avg_weekday_boardings as number) : null,
+        rail:
+          b && num(r.rail_avg_weekday_entries) && num(b.rail_avg_weekday_entries)
+            ? (r.rail_avg_weekday_entries as number) / (b.rail_avg_weekday_entries as number)
+            : null,
+        bus:
+          b && num(r.bus_avg_weekday_boardings) && num(b.bus_avg_weekday_boardings)
+            ? (r.bus_avg_weekday_boardings as number) / (b.bus_avg_weekday_boardings as number)
+            : null,
       }
     })
   const lastRecovery = recoveryData[recoveryData.length - 1]
@@ -116,13 +139,27 @@ export function OverviewPage() {
   }
 
   // Day types: average daily rides per day type, now vs 52 weeks earlier.
-  const dayTypes = useQueryOrThrow({ metrics: ['rail_avg_daily_entries', 'bus_avg_daily_boardings'], groupBy: ['service_day__day_type'], timeRange: window })
-  const dayTypesLy = useQueryOrThrow({ metrics: ['rail_avg_daily_entries', 'bus_avg_daily_boardings'], groupBy: ['service_day__day_type'], timeRange: priorYear(window) })
+  const dayTypes = useQueryOrThrow({
+    metrics: ['rail_avg_daily_entries', 'bus_avg_daily_boardings'],
+    groupBy: ['service_day__day_type'],
+    timeRange: window,
+  })
+  const dayTypesLy = useQueryOrThrow({
+    metrics: ['rail_avg_daily_entries', 'bus_avg_daily_boardings'],
+    groupBy: ['service_day__day_type'],
+    timeRange: priorYear(window),
+  })
   const dayTypeOrder = ['Weekday', 'Saturday', 'Sunday/Holiday']
   const dayTypeData = dayTypeOrder.map((t) => {
     const now = dayTypes.rows.find((r) => r.service_day__day_type === t)
     const ly = dayTypesLy.rows.find((r) => r.service_day__day_type === t)
-    return { t, rail: num(now?.rail_avg_daily_entries), bus: num(now?.bus_avg_daily_boardings), railLy: num(ly?.rail_avg_daily_entries), busLy: num(ly?.bus_avg_daily_boardings) }
+    return {
+      t,
+      rail: num(now?.rail_avg_daily_entries),
+      bus: num(now?.bus_avg_daily_boardings),
+      railLy: num(ly?.rail_avg_daily_entries),
+      busLy: num(ly?.bus_avg_daily_boardings),
+    }
   })
 
   // Stations: busiest and biggest movers (weekday averages, stations with at least 1,000 weekday entries a year earlier).
@@ -132,20 +169,33 @@ export function OverviewPage() {
     timeRange: window,
   })
   const stationRows = stations.rows.filter((r) => num(r.rail_avg_weekday_entries) !== null)
-  const busiest = [...stationRows].sort((a, b) => (b.rail_avg_weekday_entries as number) - (a.rail_avg_weekday_entries as number)).slice(0, 10)
+  const busiest = [...stationRows]
+    .sort((a, b) => (b.rail_avg_weekday_entries as number) - (a.rail_avg_weekday_entries as number))
+    .slice(0, 10)
   // Closed stations (zero entries now) are not demand changes: they are listed on Exceptions instead.
-  const movers = stationRows.filter((r) => (num(r.rail_avg_weekday_entries_ly) ?? 0) >= 1000 && num(r.rail_avg_weekday_yoy) !== null && (num(r.rail_avg_weekday_entries) ?? 0) > 0)
+  const movers = stationRows.filter(
+    (r) =>
+      (num(r.rail_avg_weekday_entries_ly) ?? 0) >= 1000 &&
+      num(r.rail_avg_weekday_yoy) !== null &&
+      (num(r.rail_avg_weekday_entries) ?? 0) > 0,
+  )
   const gainers = [...movers].sort((a, b) => (b.rail_avg_weekday_yoy as number) - (a.rail_avg_weekday_yoy as number)).slice(0, 5)
   const decliners = [...movers].sort((a, b) => (a.rail_avg_weekday_yoy as number) - (b.rail_avg_weekday_yoy as number)).slice(0, 5)
 
   // Lines.
-  const lines = useQueryOrThrow({ metrics: ['line_avg_weekday_allocated', 'line_avg_weekday_yoy'], groupBy: ['line__line_name'], timeRange: window })
+  const lines = useQueryOrThrow({
+    metrics: ['line_avg_weekday_allocated', 'line_avg_weekday_yoy'],
+    groupBy: ['line__line_name'],
+    timeRange: window,
+  })
 
   // Exceptions on the latest 7 days.
   const recent = detectExceptions(ds, { start: ds.maxDay - 6, end: ds.maxDay, threshold: 0.4, minExpected: 500, modes: ['rail', 'bus'] })
 
   const periodLabel = window.start === window.end ? formatDay(dayOfIso(window.start), true) : formatRange(window.start, window.end)
-  const weekdaysInWindow = [...Array(dayOfIso(window.end) - dayOfIso(window.start) + 1)].some((_, i) => ds.dayType.get(dayOfIso(window.start) + i) === 'Weekday')
+  const weekdaysInWindow = [...Array(dayOfIso(window.end) - dayOfIso(window.start) + 1)].some(
+    (_, i) => ds.dayType.get(dayOfIso(window.start) + i) === 'Weekday',
+  )
 
   return (
     <div className="flex flex-col gap-8">
@@ -245,53 +295,82 @@ export function OverviewPage() {
           />
         </ChartCard>
 
-        <Card className="gap-4">
-          <CardHeader>
-            <CardTitle>Day types</CardTitle>
-            <CardDescription>Average rides per day, {periodLabel}, vs 52 weeks earlier.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <PeriodBarChart
-              data={dayTypeData.map((d) => ({ t: d.t, rail: d.rail, bus: d.bus }))}
-              series={[
-                { key: 'rail', label: 'Rail', color: 'var(--series-1)' },
-                { key: 'bus', label: 'Bus', color: 'var(--series-2)' },
-              ]}
-              stacked
-              formatTick={(t) => (t === 'Sunday/Holiday' ? 'Sun/Hol' : t)}
-              formatTitle={(t) => t}
-              formatValue={(v) => formatValue(v)}
-              formatAxis={(v) => formatCompact(v)}
-              height={180}
-              ariaLabel="Average rides per day by day type, rail and bus"
-            />
-            <dl className="grid grid-cols-3 gap-2 text-xs">
-              {dayTypeData.map((d) => {
-                const now = (d.rail ?? 0) + (d.bus ?? 0)
-                const ly = (d.railLy ?? 0) + (d.busLy ?? 0)
-                const delta = now && ly ? now / ly - 1 : null
-                return (
-                  <div key={d.t} className="flex flex-col gap-0.5 rounded-lg bg-muted px-2.5 py-2">
-                    <dt className="text-muted-foreground">{d.t === 'Sunday/Holiday' ? 'Sun/Holiday' : d.t}</dt>
-                    <dd className="text-sm font-semibold tabular-nums">{now ? formatCompact(now) : '—'}</dd>
-                    <dd className={cn('tabular-nums', delta !== null && delta > 0 ? 'text-success' : delta !== null && delta < 0 ? 'text-warning-soft-foreground' : 'text-muted-foreground')}>
-                      {formatSignedPercent(delta)}
-                    </dd>
-                  </div>
-                )
-              })}
-            </dl>
-          </CardContent>
-        </Card>
+        <ChartCard
+          title="Day types"
+          description={`Average rides per day, ${periodLabel}, vs 52 weeks earlier.`}
+          contentClassName="flex flex-col gap-4"
+          csv={() =>
+            csvFromRecords(dayTypeData, [
+              { label: 'day_type', value: (d) => d.t },
+              { label: 'rail_avg_daily_entries', value: (d) => d.rail },
+              { label: 'bus_avg_daily_boardings', value: (d) => d.bus },
+              { label: 'rail_avg_daily_entries_ly', value: (d) => d.railLy },
+              { label: 'bus_avg_daily_boardings_ly', value: (d) => d.busLy },
+            ])
+          }
+        >
+          <PeriodBarChart
+            data={dayTypeData.map((d) => ({ t: d.t, rail: d.rail, bus: d.bus }))}
+            series={[
+              { key: 'rail', label: 'Rail', color: 'var(--series-1)' },
+              { key: 'bus', label: 'Bus', color: 'var(--series-2)' },
+            ]}
+            stacked
+            formatTick={(t) => (t === 'Sunday/Holiday' ? 'Sun/Hol' : t)}
+            formatTitle={(t) => t}
+            formatValue={(v) => formatValue(v)}
+            formatAxis={(v) => formatCompact(v)}
+            height={180}
+            ariaLabel="Average rides per day by day type, rail and bus"
+          />
+          <dl className="grid grid-cols-3 gap-2 text-xs">
+            {dayTypeData.map((d) => {
+              const now = (d.rail ?? 0) + (d.bus ?? 0)
+              const ly = (d.railLy ?? 0) + (d.busLy ?? 0)
+              const delta = now && ly ? now / ly - 1 : null
+              return (
+                <div key={d.t} className="flex flex-col gap-0.5 rounded-lg bg-muted px-2.5 py-2">
+                  <dt className="text-muted-foreground">{d.t === 'Sunday/Holiday' ? 'Sun/Holiday' : d.t}</dt>
+                  <dd className="text-sm font-semibold tabular-nums">{now ? formatCompact(now) : '—'}</dd>
+                  <dd
+                    className={cn(
+                      'tabular-nums',
+                      delta !== null && delta > 0
+                        ? 'text-success'
+                        : delta !== null && delta < 0
+                          ? 'text-warning-soft-foreground'
+                          : 'text-muted-foreground',
+                    )}
+                  >
+                    {formatSignedPercent(delta)}
+                  </dd>
+                </div>
+              )
+            })}
+          </dl>
+        </ChartCard>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <ChartCard
           title="Busiest stations"
           description={`Average weekday entries, ${periodLabel}.`}
-          view={{ metrics: ['rail_avg_weekday_entries', 'rail_avg_weekday_yoy'], groupBy: ['station__station_name'], where: [], range: preset, custom, chart: 'table' }}
+          view={{
+            metrics: ['rail_avg_weekday_entries', 'rail_avg_weekday_yoy'],
+            groupBy: ['station__station_name'],
+            where: [],
+            range: preset,
+            custom,
+            chart: 'table',
+          }}
           result={{ ...stations, rows: busiest }}
-          table={<ResultTable result={{ ...stations, rows: busiest }} hide={['station', 'rail_avg_weekday_entries_ly']} signed={['rail_avg_weekday_yoy']} />}
+          table={
+            <ResultTable
+              result={{ ...stations, rows: busiest }}
+              hide={['station', 'rail_avg_weekday_entries_ly']}
+              signed={['rail_avg_weekday_yoy']}
+            />
+          }
         >
           <RankedBars
             items={busiest.map((r) => ({
@@ -305,53 +384,62 @@ export function OverviewPage() {
           />
         </ChartCard>
 
-        <Card className="gap-4">
-          <CardHeader>
-            <CardTitle>Biggest movers</CardTitle>
-            <CardDescription>Weekday entries vs 52 weeks earlier, stations with 1,000+ a year ago. Closed stations are on Exceptions.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <MoverList title="Up" rows={gainers} />
-            <MoverList title="Down" rows={decliners} />
-          </CardContent>
-        </Card>
+        <ChartCard
+          title="Biggest movers"
+          description="Weekday entries vs 52 weeks earlier, stations with 1,000+ a year ago. Closed stations are on Exceptions."
+          contentClassName="flex flex-col gap-4"
+          csv={() =>
+            csvFromRecords(
+              [...gainers.map((r) => ({ r, dir: 'up' })), ...decliners.map((r) => ({ r, dir: 'down' }))],
+              [
+                { label: 'direction', value: (x) => x.dir },
+                { label: 'station_id', value: (x) => x.r.station },
+                { label: 'station_name', value: (x) => x.r.station__station_name },
+                { label: 'rail_avg_weekday_entries', value: (x) => x.r.rail_avg_weekday_entries },
+                { label: 'rail_avg_weekday_entries_ly', value: (x) => x.r.rail_avg_weekday_entries_ly },
+                { label: 'rail_avg_weekday_yoy', value: (x) => x.r.rail_avg_weekday_yoy },
+              ],
+            )
+          }
+        >
+          <MoverList title="Up" rows={gainers} />
+          <MoverList title="Down" rows={decliners} />
+        </ChartCard>
 
-        <Card className="gap-4">
-          <CardHeader>
-            <CardTitle>Lines</CardTitle>
-            <CardDescription>Average weekday entries, split across the all-day lines at transfer stations.</CardDescription>
-            <CardAction>
-              <Button variant="ghost" size="sm" onClick={() => dashNavigate('/lines')}>
-                All lines
-                <ArrowRight />
-              </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex flex-col">
-              {ds.lines.map((line) => {
-                const r = lines.rows.find((x) => x.line__line_name === line.name)
-                return (
-                  <li key={line.id}>
-                    <a
-                      href={dashHref(`/lines/line?id=${line.id}`)}
-                      className="grid grid-cols-[1fr_auto_4.5rem] items-center gap-3 rounded-md px-2 py-1.5 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <span className="flex items-center gap-2">
-                        <LineSwatch line={line} />
-                        {line.name}
-                      </span>
-                      <span className="font-medium tabular-nums">{formatCompact(num(r?.line_avg_weekday_allocated))}</span>
-                      <span className="text-right text-xs tabular-nums">
-                        <Delta v={num(r?.line_avg_weekday_yoy)} />
-                      </span>
-                    </a>
-                  </li>
-                )
-              })}
-            </ul>
-          </CardContent>
-        </Card>
+        <ChartCard
+          title="Lines"
+          description="Average weekday entries, split across the all-day lines at transfer stations."
+          csv={() => resultCsvData(lines)}
+          controls={
+            <Button variant="ghost" size="sm" onClick={() => dashNavigate('/lines')}>
+              All lines
+              <ArrowRight />
+            </Button>
+          }
+        >
+          <ul className="flex flex-col">
+            {ds.lines.map((line) => {
+              const r = lines.rows.find((x) => x.line__line_name === line.name)
+              return (
+                <li key={line.id}>
+                  <a
+                    href={dashHref(`/lines/line?id=${line.id}`)}
+                    className="grid grid-cols-[1fr_auto_4.5rem] items-center gap-3 rounded-md px-2 py-1.5 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="flex items-center gap-2">
+                      <LineSwatch line={line} />
+                      {line.name}
+                    </span>
+                    <span className="font-medium tabular-nums">{formatCompact(num(r?.line_avg_weekday_allocated))}</span>
+                    <span className="text-right text-xs tabular-nums">
+                      <Delta v={num(r?.line_avg_weekday_yoy)} />
+                    </span>
+                  </a>
+                </li>
+              )
+            })}
+          </ul>
+        </ChartCard>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
@@ -376,44 +464,49 @@ export function OverviewPage() {
           />
         </ChartCard>
 
-        <Card className="gap-4">
-          <CardHeader>
-            <CardTitle>Exceptions, last 7 days</CardTitle>
-            <CardDescription>Stations and routes 40%+ off their usual weekday pattern.</CardDescription>
-            <CardAction>
-              <Button variant="ghost" size="sm" onClick={() => dashNavigate('/exceptions')}>
-                Review
-                <ArrowRight />
-              </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            {recent.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">Nothing unusual in the last 7 days.</p>
-            ) : (
-              <ul className="flex flex-col divide-y">
-                {recent.slice(0, 6).map((e) => (
-                  <li key={e.id} className="flex items-center justify-between gap-3 py-2">
-                    <a
-                      className="min-w-0 rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-                      href={dashHref(e.mode === 'rail' ? `/rail/station?id=${e.entityId}` : `/bus/route?id=${encodeURIComponent(e.entityId)}`)}
-                    >
-                      <span className="block truncate text-sm font-medium">{e.entityName}</span>
-                      <span className="block text-xs text-muted-foreground">
-                        {e.mode === 'rail' ? 'Rail' : 'Bus'} · {e.days === 1 ? formatDay(e.start, true) : `${e.ongoing ? 'since' : 'from'} ${formatDay(e.start)} (${e.days.toLocaleString()} days)`}
-                      </span>
-                    </a>
-                    <span className="flex shrink-0 flex-col items-end gap-1">
-                      <Badge variant={KIND_VARIANT[e.kind]}>{KIND_LABEL[e.kind]}</Badge>
-                      <span className="text-xs text-muted-foreground tabular-nums">{e.worstRatio !== null ? formatSignedPercent(e.worstRatio) : 'no data'}</span>
+        <ChartCard
+          title="Exceptions, last 7 days"
+          description="Stations and routes 40%+ off their usual weekday pattern."
+          csv={() => episodesCsv(recent)}
+          controls={
+            <Button variant="ghost" size="sm" onClick={() => dashNavigate('/exceptions')}>
+              Review
+              <ArrowRight />
+            </Button>
+          }
+        >
+          {recent.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Nothing unusual in the last 7 days.</p>
+          ) : (
+            <ul className="flex flex-col divide-y">
+              {recent.slice(0, 6).map((e) => (
+                <li key={e.id} className="flex items-center justify-between gap-3 py-2">
+                  <a
+                    className="min-w-0 rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                    href={dashHref(
+                      e.mode === 'rail' ? `/rail/station?id=${e.entityId}` : `/bus/route?id=${encodeURIComponent(e.entityId)}`,
+                    )}
+                  >
+                    <span className="block truncate text-sm font-medium">{e.entityName}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {e.mode === 'rail' ? 'Rail' : 'Bus'} ·{' '}
+                      {e.days === 1
+                        ? formatDay(e.start, true)
+                        : `${e.ongoing ? 'since' : 'from'} ${formatDay(e.start)} (${e.days.toLocaleString()} days)`}
                     </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {recent.length > 6 && <p className="pt-2 text-xs text-muted-foreground">{recent.length - 6} more on the Exceptions page.</p>}
-          </CardContent>
-        </Card>
+                  </a>
+                  <span className="flex shrink-0 flex-col items-end gap-1">
+                    <Badge variant={KIND_VARIANT[e.kind]}>{KIND_LABEL[e.kind]}</Badge>
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {e.worstRatio !== null ? formatSignedPercent(e.worstRatio) : 'no data'}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {recent.length > 6 && <p className="pt-2 text-xs text-muted-foreground">{recent.length - 6} more on the Exceptions page.</p>}
+        </ChartCard>
       </div>
     </div>
   )

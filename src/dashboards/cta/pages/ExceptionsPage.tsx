@@ -7,7 +7,6 @@ import { StatTile } from '@/components/charts/StatTile'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -15,13 +14,20 @@ import { Segmented } from '@/components/ui/segmented'
 import { ChartCard } from '@/features/semantic/components/ChartCard'
 import { RangeControl } from '@/features/semantic/components/RangeControl'
 import { dayOfIso, isoOfDay } from '@/features/semantic/core/time.ts'
-import type { QueryResult } from '@/features/semantic/core/types.ts'
-import { downloadCsv } from '@/features/semantic/csv'
 import { useDataset } from '@/features/semantic/data'
 import { formatCompact, formatDay, formatPeriod, formatSignedPercent, formatValue } from '@/features/semantic/format'
 import { useRangeParam } from '@/features/semantic/useRangeParam'
-import { detectExceptions, KIND_LABEL, KIND_VARIANT, type Episode, type ExceptionKind, type Mode } from '@/features/transit/exceptions'
+import {
+  detectExceptions,
+  episodesCsv,
+  KIND_LABEL,
+  KIND_VARIANT,
+  type Episode,
+  type ExceptionKind,
+  type Mode,
+} from '@/features/transit/exceptions'
 import { dashHref } from '@/app/hub'
+import { csvFromRecords, downloadCsvData } from '@/lib/download'
 
 const THRESHOLDS = ['0.25', '0.35', '0.5'] as const
 const MIN_EXPECTED = ['200', '500', '1000', '2500'] as const
@@ -39,11 +45,22 @@ export function ExceptionsPage() {
   const start = dayOfIso(window.start)
   const end = dayOfIso(window.end)
   const all = useMemo(
-    () => detectExceptions(ds, { start, end, threshold: Number(threshold), minExpected: Number(minExpected), modes: mode === 'all' ? ['rail', 'bus'] : [mode] }),
+    () =>
+      detectExceptions(ds, {
+        start,
+        end,
+        threshold: Number(threshold),
+        minExpected: Number(minExpected),
+        modes: mode === 'all' ? ['rail', 'bus'] : [mode],
+      }),
     [ds, start, end, threshold, minExpected, mode],
   )
   const needle = q.trim().toLowerCase()
-  const episodes = all.filter((e) => (kind === 'all' || e.kind === kind) && (!needle || e.entityName.toLowerCase().includes(needle) || e.entityId.toLowerCase() === needle))
+  const episodes = all.filter(
+    (e) =>
+      (kind === 'all' || e.kind === kind) &&
+      (!needle || e.entityName.toLowerCase().includes(needle) || e.entityId.toLowerCase() === needle),
+  )
 
   const nearHoliday = (e: Episode) => e.daysDetail.some((d) => [-2, -1, 0, 1, 2].some((k) => ds.holidays.has(d.day + k)))
 
@@ -68,7 +85,11 @@ export function ExceptionsPage() {
       sort: (e) => e.entityName,
       render: (e) => (
         <a
-          href={dashHref(e.mode === 'rail' ? `/rail/station?id=${e.entityId}&range=custom&from=${isoOfDay(e.start - 21)}&to=${isoOfDay(Math.min(ds.maxDay, e.end + 21))}` : `/bus/route?id=${encodeURIComponent(e.entityId)}&range=custom&from=${isoOfDay(e.start - 21)}&to=${isoOfDay(Math.min(ds.maxDay, e.end + 21))}`)}
+          href={dashHref(
+            e.mode === 'rail'
+              ? `/rail/station?id=${e.entityId}&range=custom&from=${isoOfDay(e.start - 21)}&to=${isoOfDay(Math.min(ds.maxDay, e.end + 21))}`
+              : `/bus/route?id=${encodeURIComponent(e.entityId)}&range=custom&from=${isoOfDay(e.start - 21)}&to=${isoOfDay(Math.min(ds.maxDay, e.end + 21))}`,
+          )}
           className="flex min-w-0 flex-col rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="truncate font-medium">{e.entityName}</span>
@@ -82,50 +103,60 @@ export function ExceptionsPage() {
       sort: (e) => e.start,
       render: (e) => (
         <span className="flex flex-col">
-          <span className="tabular-nums">{e.days === 1 ? formatDay(e.start, true) : `${formatDay(e.start)} – ${e.ongoing ? 'now' : formatDay(e.end)}`}</span>
+          <span className="tabular-nums">
+            {e.days === 1 ? formatDay(e.start, true) : `${formatDay(e.start)} – ${e.ongoing ? 'now' : formatDay(e.end)}`}
+          </span>
           <span className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-            {e.days > 1 && <span>{e.days.toLocaleString()} days{e.windowDays !== e.days ? `, ${e.windowDays} in period` : ''}</span>}
+            {e.days > 1 && (
+              <span>
+                {e.days.toLocaleString()} days{e.windowDays !== e.days ? `, ${e.windowDays} in period` : ''}
+              </span>
+            )}
             {e.ongoing && <Badge variant="warning">Ongoing</Badge>}
             {nearHoliday(e) && <Badge variant="outline">Near a holiday</Badge>}
           </span>
         </span>
       ),
     },
-    { key: 'actual', label: 'Actual', title: 'Riders counted on the flagged days inside the selected period', align: 'right', sort: (e) => e.actual, render: (e) => formatValue(e.actual) },
-    { key: 'expected', label: 'Expected', title: 'Median of the same weekday over the last 8 normal weeks (Sundays for holidays); carried forward through long closures', align: 'right', sort: (e) => e.expected, render: (e) => formatValue(Math.round(e.expected)) },
-    { key: 'worst', label: 'Worst day', align: 'right', sort: (e) => (e.worstRatio === null ? null : Math.abs(e.worstRatio)), render: (e) => (e.worstRatio === null ? 'no data' : formatSignedPercent(e.worstRatio)) },
+    {
+      key: 'actual',
+      label: 'Actual',
+      title: 'Riders counted on the flagged days inside the selected period',
+      align: 'right',
+      sort: (e) => e.actual,
+      render: (e) => formatValue(e.actual),
+    },
+    {
+      key: 'expected',
+      label: 'Expected',
+      title: 'Median of the same weekday over the last 8 normal weeks (Sundays for holidays); carried forward through long closures',
+      align: 'right',
+      sort: (e) => e.expected,
+      render: (e) => formatValue(Math.round(e.expected)),
+    },
+    {
+      key: 'worst',
+      label: 'Worst day',
+      align: 'right',
+      sort: (e) => (e.worstRatio === null ? null : Math.abs(e.worstRatio)),
+      render: (e) => (e.worstRatio === null ? 'no data' : formatSignedPercent(e.worstRatio)),
+    },
     {
       key: 'impact',
       label: 'Riders vs expected',
       title: 'Over the flagged days inside the selected period',
       align: 'right',
       sort: (e) => Math.abs(e.impact),
-      render: (e) => <span className={e.impact < 0 ? 'text-warning-soft-foreground' : 'text-info-soft-foreground'}>{`${e.impact > 0 ? '+' : '−'}${formatValue(Math.abs(Math.round(e.impact)))}`}</span>,
+      render: (e) => (
+        <span
+          className={e.impact < 0 ? 'text-warning-soft-foreground' : 'text-info-soft-foreground'}
+        >{`${e.impact > 0 ? '+' : '−'}${formatValue(Math.abs(Math.round(e.impact)))}`}</span>
+      ),
     },
   ]
 
-  const exportRows = () => {
-    const result: QueryResult = {
-      columns: ['type', 'mode', 'id', 'name', 'start', 'end', 'days', 'actual', 'expected', 'worst_ratio', 'impact', 'ongoing'].map((k) => ({ key: k, label: k, kind: 'metric' as const })),
-      rows: episodes.map((e) => ({
-        type: e.kind,
-        mode: e.mode,
-        id: e.entityId,
-        name: e.entityName,
-        start: isoOfDay(e.start),
-        end: isoOfDay(e.end),
-        days: e.days,
-        actual: e.actual,
-        expected: Math.round(e.expected),
-        worst_ratio: e.worstRatio,
-        impact: Math.round(e.impact),
-        ongoing: String(e.ongoing),
-      })),
-      plan: [],
-      ms: 0,
-    }
-    downloadCsv(result, `exceptions ${window.start} to ${window.end}`)
-  }
+  const exportName = `exceptions ${window.start} to ${window.end}`
+  const exportRows = () => downloadCsvData(episodesCsv(episodes), exportName)
 
   return (
     <div className="flex flex-col gap-8">
@@ -169,7 +200,12 @@ export function ExceptionsPage() {
           <Label htmlFor={`${id}-min`} className="text-xs text-muted-foreground">
             Min. expected riders
           </Label>
-          <NativeSelect id={`${id}-min`} value={minExpected} onChange={(e) => setParams({ min: e.target.value === '500' ? null : e.target.value })} className="w-32">
+          <NativeSelect
+            id={`${id}-min`}
+            value={minExpected}
+            onChange={(e) => setParams({ min: e.target.value === '500' ? null : e.target.value })}
+            className="w-32"
+          >
             {MIN_EXPECTED.map((m) => (
               <option key={m} value={m}>
                 {Number(m).toLocaleString()}
@@ -181,7 +217,12 @@ export function ExceptionsPage() {
           <Label htmlFor={`${id}-kind`} className="text-xs text-muted-foreground">
             Type
           </Label>
-          <NativeSelect id={`${id}-kind`} value={kind} onChange={(e) => setParams({ kind: e.target.value === 'all' ? null : e.target.value })} className="w-36">
+          <NativeSelect
+            id={`${id}-kind`}
+            value={kind}
+            onChange={(e) => setParams({ kind: e.target.value === 'all' ? null : e.target.value })}
+            className="w-36"
+          >
             <option value="all">All types</option>
             {(Object.keys(KIND_LABEL) as ExceptionKind[]).map((k) => (
               <option key={k} value={k}>
@@ -196,7 +237,13 @@ export function ExceptionsPage() {
           </Label>
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input id={`${id}-q`} value={q} onChange={(e) => setParams({ q: e.target.value })} placeholder="Station or route" className="pl-8" />
+            <Input
+              id={`${id}-q`}
+              value={q}
+              onChange={(e) => setParams({ q: e.target.value })}
+              placeholder="Station or route"
+              className="pl-8"
+            />
           </div>
         </div>
       </div>
@@ -208,7 +255,19 @@ export function ExceptionsPage() {
         <StatTile label="Riders above expected" value={formatCompact(surplus)} hint="surges" />
       </div>
 
-      <ChartCard title="Flagged per day" description="Stations and routes off pattern each day, by type." result={null}>
+      <ChartCard
+        title="Flagged per day"
+        description="Stations and routes off pattern each day, by type."
+        csv={() =>
+          csvFromRecords(timeline, [
+            { label: 'date', value: (r) => r.t },
+            { label: 'drop', value: (r) => r.drop },
+            { label: 'zero', value: (r) => r.zero },
+            { label: 'missing', value: (r) => r.missing },
+            { label: 'surge', value: (r) => r.surge },
+          ])
+        }
+      >
         <PeriodBarChart
           data={timeline}
           series={[
@@ -226,18 +285,22 @@ export function ExceptionsPage() {
         />
       </ChartCard>
 
-      <Card className="py-2">
-        <CardContent className="px-2">
-          <SortTable
-            rows={episodes}
-            columns={columns}
-            rowKey={(e) => e.id}
-            initialSort={{ key: 'impact', desc: true }}
-            caption="Exception episodes"
-            empty="No exceptions at this sensitivity. Try a wider range or a lower threshold."
-          />
-        </CardContent>
-      </Card>
+      <ChartCard
+        title="Episodes"
+        description="Consecutive off-pattern days merged into one row, largest impact first."
+        csv={() => episodesCsv(episodes)}
+        exportName={exportName}
+        contentClassName="px-2"
+      >
+        <SortTable
+          rows={episodes}
+          columns={columns}
+          rowKey={(e) => e.id}
+          initialSort={{ key: 'impact', desc: true }}
+          caption="Exception episodes"
+          empty="No exceptions at this sensitivity. Try a wider range or a lower threshold."
+        />
+      </ChartCard>
     </div>
   )
 }

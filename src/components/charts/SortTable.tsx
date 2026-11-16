@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import type { CsvCell, CsvData } from '@/lib/download'
 import { cn } from '@/lib/utils'
 
 export interface SortColumn<T> {
@@ -13,6 +14,8 @@ export interface SortColumn<T> {
   /** Value to sort by; omit for an unsortable column. Nulls sort last. */
   sort?: (row: T) => number | string | null
   render: (row: T) => ReactNode
+  /** Raw value for CSV exports (default: the `sort` value). Columns with neither are left out. */
+  csv?: (row: T) => CsvCell
   className?: string
 }
 
@@ -26,6 +29,12 @@ interface SortTableProps<T> {
   empty?: ReactNode
   /** Make the first column sticky when the table scrolls sideways. */
   stickyFirst?: boolean
+}
+
+/** The table's rows as raw values (not display-formatted), every row, not just the first page. */
+export function sortTableCsv<T>(rows: T[], columns: SortColumn<T>[]): CsvData {
+  const cols = columns.filter((c) => c.csv || c.sort)
+  return { columns: cols.map((c) => c.label), rows: rows.map((r) => cols.map((c) => (c.csv ?? c.sort)!(r))) }
 }
 
 /** A sortable table for list pages. Header buttons announce sort state; long lists page. */
@@ -60,7 +69,11 @@ export function SortTable<T>({ rows, columns, rowKey, initialSort, pageSize = 50
                 <TableHead
                   key={c.key}
                   aria-sort={active ? (sort.desc ? 'descending' : 'ascending') : undefined}
-                  className={cn('h-9 text-xs whitespace-nowrap', c.align === 'right' && 'text-right', stickyFirst && i === 0 && 'sticky left-0 z-10 bg-card')}
+                  className={cn(
+                    'h-9 text-xs whitespace-nowrap',
+                    c.align === 'right' && 'text-right',
+                    stickyFirst && i === 0 && 'sticky left-0 z-10 bg-card',
+                  )}
                 >
                   {c.sort ? (
                     <button
@@ -92,7 +105,12 @@ export function SortTable<T>({ rows, columns, rowKey, initialSort, pageSize = 50
               {columns.map((c, i) => (
                 <TableCell
                   key={c.key}
-                  className={cn('py-2 text-sm', c.align === 'right' && 'text-right tabular-nums', stickyFirst && i === 0 && 'sticky left-0 z-10 bg-card', c.className)}
+                  className={cn(
+                    'py-2 text-sm',
+                    c.align === 'right' && 'text-right tabular-nums',
+                    stickyFirst && i === 0 && 'sticky left-0 z-10 bg-card',
+                    c.className,
+                  )}
                 >
                   {c.render(row)}
                 </TableCell>
@@ -113,7 +131,11 @@ export function SortTable<T>({ rows, columns, rowKey, initialSort, pageSize = 50
           <span>
             Showing {shown.length} of {sorted.length}
           </span>
-          <button type="button" onClick={() => setAll(!all)} className="rounded-sm font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+          <button
+            type="button"
+            onClick={() => setAll(!all)}
+            className="rounded-sm font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+          >
             {all ? 'Show fewer' : `Show all ${sorted.length}`}
           </button>
         </div>
